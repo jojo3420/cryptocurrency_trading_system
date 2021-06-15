@@ -28,6 +28,7 @@ def get_market_info(ticker: str, days: int = 5) -> tuple:
 
 
 def moving_average_by(ticker: str, days: int = 5) -> DataFrame:
+    """ 이돌평균 구하기 """
     try:
         prices: DataFrame = Bithumb.get_candlestick(ticker)
         close = prices['close']

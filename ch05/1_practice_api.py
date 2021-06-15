@@ -4,12 +4,13 @@ import time
 from datetime import datetime
 
 all_ticker: list = Bithumb.get_tickers()
-print(type(all_ticker), len(all_ticker))
-print(all_ticker)
+# print(type(all_ticker), len(all_ticker))
+# print(all_ticker)
 
 # for ticker in all_ticker:
 # print(ticker)
-# price = Bithumb.get_current_price(ticker)
+price = Bithumb.get_current_price('BTC')
+print(price)
 # print(ticker, price)
 # time.sleep(0.1)  # 1초에 10개
 # time.sleep(0.05)  # 1초에 20개
