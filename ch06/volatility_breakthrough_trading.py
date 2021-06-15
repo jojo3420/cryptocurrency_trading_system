@@ -1,3 +1,9 @@
+import os, sys
+
+if os.name == 'nt':
+    sys.path.append('C:\\source_code\\python\\cryptocurrency_trading_system')
+    sys.path.append('C:\\source_code\\cryptocurrency_trading_system')
+
 from common.utils import *
 from common.bithumb_api import *
 import time, sys
