@@ -489,13 +489,14 @@ if __name__ == '__main__':
         start_sell_tm = today.replace(hour=8, minute=40, second=0, microsecond=0)
         end_sell_tm = today.replace(hour=8, minute=59, second=0, microsecond=0)
 
-        # 윌리엄스 R 돌파 전략 트레이딩 시간
+        # 트레이딩 시간
         start_trading_tm = today.replace(hour=0, minute=5, second=0, microsecond=0)
-        start_trading_tm = today.replace(hour=9, minute=1, second=0, microsecond=0)
         end_trading_tm = today.replace(hour=8, minute=0, second=0, microsecond=0)
-        end_trading_tm = today.replace(hour=20, minute=0, second=0, microsecond=0)
-        exit_tm = today.replace(hour=9, minute=0, second=0, microsecond=0)
+        # start_trading_tm = today.replace(hour=9, minute=1, second=0, microsecond=0)
+        # end_trading_tm = today.replace(hour=20, minute=0, second=0, microsecond=0)
+        # exit_tm = today.replace(hour=9, minute=0, second=0, microsecond=0)
 
+        # 매수희망 종목 새로고침
         start_update_buy_tickers = today.replace(hour=0, minute=0, second=0, microsecond=0)
         end_update_buy_tickers = today.replace(hour=0, minute=5, second=0, microsecond=0)
 

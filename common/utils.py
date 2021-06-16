@@ -6,9 +6,9 @@ from datetime import datetime, timedelta
 import traceback
 import time
 
-# if os.name == 'nt':
-#     sys.path.append('C:\\source_code\\python\\cryptocurrency_trading_system')
-#     sys.path.append('C:\\source_code\\cryptocurrency_trading_system')
+if os.name == 'nt':
+    sys.path.append('C:\\source_code\\python\\cryptocurrency_trading_system')
+    sys.path.append('C:\\source_code\\cryptocurrency_trading_system')
 
 
 ymd_format = '%Y-%m-%d'
