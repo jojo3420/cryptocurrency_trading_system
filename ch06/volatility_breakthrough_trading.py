@@ -358,8 +358,9 @@ def calc_ratio_by_ma():
     """
     result = dict()
     coin_buy_wish_list, coin_ratio_list, coin_r_list = get_buy_wish_list()
-    # val = 1 / len(coin_buy_wish_list)
-    val = 0.1 / len(coin_buy_wish_list)  # test 기간 보유비중 1/10 줄임
+    # print(coin_buy_wish_list)
+    val = 1 / len(coin_buy_wish_list)
+    # val = 0.5 / len(coin_buy_wish_list)  # test 기간 보유비중 1/10 줄임
     for i, ticker in enumerate(coin_buy_wish_list):
         MA3 = calc_moving_average_by(ticker, 3)
         MA5 = calc_moving_average_by(ticker, 5)
@@ -472,7 +473,7 @@ def get_total_yield() -> float:
 
 
 if __name__ == '__main__':
-    update_coin_buy_wish_list()
+    # update_coin_buy_wish_list()
     calc_ratio_by_ma()
     loss_ratio = -2.0
 
