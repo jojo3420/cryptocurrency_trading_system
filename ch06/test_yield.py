@@ -6,3 +6,5 @@ from volatility_breakthrough_trading import *
 
 print(get_yield('ETH'))
 print(get_yield('KLAY'))
+
+send_report()

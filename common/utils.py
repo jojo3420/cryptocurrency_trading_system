@@ -4,10 +4,12 @@ import pymysql
 import sys
 from datetime import datetime, timedelta
 import traceback
+import time
 
 # if os.name == 'nt':
-#     sys.path.append('C:\\source_code\\python\\python_stock_data_analysis')
-#     sys.path.append('C:\\source_code\\python_stock_data_analysis')
+#     sys.path.append('C:\\source_code\\python\\cryptocurrency_trading_system')
+#     sys.path.append('C:\\source_code\\cryptocurrency_trading_system')
+
 
 ymd_format = '%Y-%m-%d'
 
@@ -29,18 +31,7 @@ def create_conn(filepath: str) -> 'conn':
         print('File Not Found!')
 
 
-def read_bithumb_key(filepath: str) -> dict:
-    import constant
-    os.chdir(constant.ROOT_DIR)
-    key_dict = {}
-    try:
-        with open(filepath) as stream:
-            for line in stream:
-                k, v = line.strip().split('=')
-                key_dict[k] = v
-        return key_dict
-    except FileNotFoundError:
-        print('File Not Found!')
+
 
 
 def log(msg, *args, **kwargs) -> None:
@@ -59,6 +50,27 @@ def mutation_db(sql: str, rows: tuple = None) -> None:
             conn.commit()
     except Exception as e:
         log(f'DB mutation 예외발생 {str(e)}')
+    except TimeoutError:
+        print("mutation_db() TimeoutError, sleeping 1 minute.")
+        time.sleep(60)
+        mutation_db(sql, rows)
+    finally:
+        if conn:
+            conn.close()
+
+
+def mutation_many(sql: str, rows: tuple = None) -> None:
+    conn = create_conn('.env')
+    try:
+        with conn.cursor() as cursor:
+            cursor.executemany(sql, rows)
+            conn.commit()
+    except Exception as e:
+        log(f'DB mutation 예외발생 {str(e)}')
+    except TimeoutError:
+        print("mutation_db() TimeoutError, sleeping 1 minute.")
+        time.sleep(60)
+        mutation_many(sql, rows)
     finally:
         if conn:
             conn.close()
@@ -72,12 +84,13 @@ def select_db(sql: str, rows: tuple = None) -> tuple:
             return cursor.fetchall()
     except Exception as e:
         log(f'DB mutation 예외발생 {str(e)}')
+    except TimeoutError:
+        print("select_db() TimeoutError, sleeping 1 minute.")
+        time.sleep(60)
+        select_db(sql, rows)
     finally:
         if conn:
             conn.close()
-
-
-
 
 
 def get_today_format(format: str = '%Y-%m-%d') -> str:
@@ -85,10 +98,10 @@ def get_today_format(format: str = '%Y-%m-%d') -> str:
     today = today.strftime(format)
     return today
 
+
+
+
 if __name__ == '__main__':
-    print('')
-    # conn = create_conn('.env')
-    # print(conn)
-    # key_dict = read_bithumb_key('.env.local')
-    # print(key_dict)
+    conn = create_conn('.env')
+    print(conn)
     print(get_today_format())

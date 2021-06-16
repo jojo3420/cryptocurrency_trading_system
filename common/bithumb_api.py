@@ -1,7 +1,30 @@
 import pybithumb
-from common.utils import *
+import os
+import sys
+if os.name == 'nt':
+    sys.path.append('C:\\source_code\\python\\cryptocurrency_trading_system')
+    sys.path.append('C:\\source_code\\cryptocurrency_trading_system')
 
-# def _create_bithumb_api() -> object:
+from common.utils import log, select_db, mutation_many
+import traceback
+import requests
+from bs4 import BeautifulSoup
+
+
+def read_bithumb_key(filepath: str) -> dict:
+    import constant
+    os.chdir(constant.ROOT_DIR)
+    key_dict = {}
+    try:
+        with open(filepath) as stream:
+            for line in stream:
+                k, v = line.strip().split('=')
+                key_dict[k] = v
+        return key_dict
+    except FileNotFoundError:
+        print('File Not Found!')
+
+
 """
 빗썸 private api 생성
 :return: api 객체
@@ -9,12 +32,6 @@ from common.utils import *
 bit_keys: dict = read_bithumb_key('.env.local')
 secretKey, connectKey = tuple(bit_keys.values())
 bithumb = pybithumb.Bithumb(connectKey, secretKey)
-
-
-# return bithumb
-
-
-# bithumb = _create_bithumb_api()
 
 
 def is_in_market(ticker: str) -> bool:
@@ -215,6 +232,66 @@ def get_my_order_completed_info(order_desc: tuple) -> tuple:
         return None
 
 
+def crawling_cryptocurrency_info():
+    """
+    빗썸 코인 목록 클롤링후 디비 저장
+    :return:
+    """
+    url = 'https://www.bithumb.com/'
+    response = requests.get(url, headers={"user-agent": "Mozilla"})
+    content = response.content
+    # print(content)
+    soup = BeautifulSoup(content, 'html5lib')
+    items: list = soup.select('tbody.coin_list tr td:first-child')
+    # print(items)
+    data = dict()
+    rows = []
+    for item in items:
+        # print(item.text)
+        name = item.select('strong')
+        name = name[0].text
+        name = name.split(' ')[0]
+        symbol = item.select('span.sort_coin')
+        symbol = symbol[0].text
+        symbol, currency = symbol.split('/')
+        # print(name)
+        # print(symbol)
+        data[symbol] = name
+        data['currency'] = currency
+        rows.append((symbol, name))
+
+    sql = 'REPLACE INTO coin_name (ticker, name) ' \
+          ' VALUES (%s, %s)'
+    # print(rows)
+    mutation_many(sql, rows)
+    return data
+
+
+def crawling_cryptocurrency_info(ticker: str) -> None:
+    """
+    빗썸 최소 주문 갯수 수집후 DB 저장
+    :return:
+    """
+    url = f'https://www.bithumb.com/trade/order/{ticker}_KRW'
+    response = requests.get(url, headers={"user-agent": "Mozilla"})
+    content = response.content
+    soup = BeautifulSoup(content, 'html5lib')
+    input_item: list = soup.select('div>input#coinQtyBuy')
+    print(input_item[0])
+
+
+def get_coin_name(ticker: str) -> str:
+    """ 코인 이름 조회 """
+    sql = 'SELECT name FROM coin_name WHERE ticker = %s'
+    name_tup = select_db(sql, ticker)
+    if name_tup:
+        name = name_tup[0][0]
+        return name
+    else:
+        crawling_cryptocurrency_info()
+        get_coin_name(ticker)
+
+
 if __name__ == '__main__':
     # bithumb = _create_bithumb_api()
     print(f'{get_krw_balance():}')
@@ -227,3 +304,5 @@ if __name__ == '__main__':
 
     # order3 = bithumb.buy_market_order('XRP', 1)
     # print(order3)
+
+    crawling_cryptocurrency_info('CHZ')
