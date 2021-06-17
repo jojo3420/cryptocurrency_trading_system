@@ -1,4 +1,6 @@
 import os, sys, time
+import traceback
+
 if os.name == 'nt':
     sys.path.append('C:\\source_code\\python\\cryptocurrency_trading_system')
     sys.path.append('C:\\source_code\\cryptocurrency_trading_system')
@@ -145,7 +147,7 @@ def buy_coin(ticker: str, buy_ratio: float, R: float = 0.5) -> None:
                     order_desc = list(order_desc)
                     order_desc.extend([price, order_qty, target_price, R, fee, transaction_krw_amount])
                     save_transaction_history(order_desc)
-                    log(f'매수주문성공: {order_desc[2]}')
+                    log(f'매수주문성공: {ticker} {order_desc[2]}')
                     msg = f'[매수알림] {ticker} \n' \
                           f'가격: {price} 수량: {round(buy_qty, 4)}개'
                     telegram_bot.send_coin_bot(msg)
@@ -154,9 +156,8 @@ def buy_coin(ticker: str, buy_ratio: float, R: float = 0.5) -> None:
             else:
                 print(f'{ticker} 주문가능 수량이 부족합니다.')
     except Exception as e:
-        log(f' sell_all() 예외발생.. 매도실패 {str(e)}')
-        sys.exit(0)
-
+        log(f' buy_coin() 예외발생.. 매수실패 {str(e)}')
+        traceback.print_exc()
 
 def sell_all():
     """
@@ -180,13 +181,13 @@ def sell_all():
                     log(f'sell() => {ticker} {coin_quantity}개')
                     order_desc: tuple = sell_market_price(ticker, coin_quantity)
                     log(f'매도 주문 성공,  order_no: {order_desc[2]}')
+                    time.sleep(0.1)
                     update_bought_list(ticker)
                     order_completed_info: tuple = get_my_order_completed_info(order_desc)
                     order_type, _ticker, price, order_qty, fee, transaction_krw_amount = order_completed_info
                     order_desc: list = list(order_desc)
                     order_desc.extend([price, coin_quantity, fee, transaction_krw_amount])
                     save_transaction_history(order_desc)
-
                     msg = f'[청산 매도알림] {ticker} \n' \
                           f'가격: {price} 수량: {round(order_qty, 4)}개'
                     telegram_bot.send_coin_bot(msg)
@@ -194,7 +195,7 @@ def sell_all():
             time.sleep(0.5)
     except Exception as e:
         log(f' sell_all() 예외발생.. 매도실패 {str(e)}')
-        sys.exit(0)
+        traceback.print_exc()
 
 
 def sell(ticker, quantity) -> bool:
@@ -270,12 +271,13 @@ def get_yield(ticker: str) -> float:
                 order_type, _ticker, price, quantity, fee, trans_krw_amount = trans_buy_info
                 current_price = bithumb.get_current_price(ticker)
                 yield_rate = (current_price / price - 1) * 100
-                # log(f'{ticker} 수익률: {round(yield_rate, 2)}%')
+                log(f'{ticker} 수익률: {round(yield_rate, 2)}%')
                 return round(yield_rate, 3)
         else:
             return 0
     except Exception as e:
         log(f' get_yield() 예외발생.. {str(e)}')
+        traceback.print_exc()
 
 
 def check_loss(ticker: str, loss_ratio: float = -2.0) -> bool:
@@ -287,7 +289,9 @@ def check_loss(ticker: str, loss_ratio: float = -2.0) -> bool:
             return True
         return False
     except Exception as e:
-        log(f' get_yield() 예외발생.. {str(e)}')
+        log(f' check_loss() 예외발생.. {str(e)}')
+        traceback.print_exc()
+
 
 
 def send_report() -> None:
@@ -482,7 +486,7 @@ if __name__ == '__main__':
         coin_bought_list: list = get_coin_bought_list()
         total_krw, use_krw = get_krw_balance()
         yields: float = get_total_yield()
-        log(f'총원화: {total_krw:,} 사용한 금액: {use_krw:,} \n 추정 총수익률: {yields}%s')
+        log(f'총원화: {total_krw:,} 사용한 금액: {use_krw:,} \n 추정 총수익률: {round(yields, 3)}%s')
         krw_balance = total_krw - use_krw
         today = datetime.now()
 
@@ -493,24 +497,20 @@ if __name__ == '__main__':
         # 트레이딩 시간
         start_trading_tm = today.replace(hour=0, minute=5, second=0, microsecond=0)
         end_trading_tm = today.replace(hour=8, minute=0, second=0, microsecond=0)
-        # start_trading_tm = today.replace(hour=9, minute=1, second=0, microsecond=0)
-        # end_trading_tm = today.replace(hour=20, minute=0, second=0, microsecond=0)
+
+        # 트레이딩 시간2 - 오전 포함 TEST
+        start_trading_tm = today.replace(hour=0, minute=1, second=0, microsecond=0)
+        end_trading_tm = today.replace(hour=23, minute=30, second=0, microsecond=0)
         # exit_tm = today.replace(hour=9, minute=0, second=0, microsecond=0)
 
         # 매수희망 종목 새로고침
         start_update_buy_tickers = today.replace(hour=0, minute=0, second=0, microsecond=0)
         end_update_buy_tickers = today.replace(hour=0, minute=5, second=0, microsecond=0)
-
         now_tm = datetime.now()
-
-        # 시스템 종료 - 휴식?
-        # if exit_tm < now_tm:
-        #     log('system exit!')
-        #     sys.exit(0)
 
         # 상승코인 목록 업데이트
         if start_update_buy_tickers < now_tm < end_update_buy_tickers:
-            update_coin_buy_wish_list()
+            # update_coin_buy_wish_list()
             calc_ratio_by_ma()
 
         if start_sell_tm < now_tm < end_sell_tm:
@@ -526,30 +526,31 @@ if __name__ == '__main__':
         #     loss_ratio = -2.0
 
         if start_trading_tm < now_tm < end_trading_tm:
-        # if True:
-            # 손절매 확인
-            for ticker in coin_bought_list:
-                is_loss = check_loss(ticker, loss_ratio)
-                if is_loss:
-                    loss_sell(ticker)
-                    time.sleep(1)
-
-            # 이익보전 - 익절매도
-            # profit_take_sell(10.0)
-            # time.sleep(0.2)
-
+            # if True:
             # 매수하기 - 변동성 돌파
             for i, ticker in enumerate(coin_buy_wish_list):
                 if ticker not in coin_bought_list:
                     buy_coin(ticker, coin_ratio_list[i], coin_r_list[i])
                     time.sleep(1)
-            # 텔레그램 수익률 보고!
-            if now_tm.minute == 0 and 0 <= now_tm.second <= 5:
-                send_report()
-                time.sleep(1)
         else:
-            log('트레이딩 휴식시간: 30초')
-            time.sleep(1 * 30)
+            log('트레이딩 휴식시간(3)')
+            time.sleep(3)
+
+        # 이익보전 - 익절매도
+        # profit_take_sell(10.0)
+        # time.sleep(0.2)
+
+        # 손절매 확인
+        for ticker in coin_bought_list:
+            is_loss = check_loss(ticker, loss_ratio)
+            if is_loss:
+                loss_sell(ticker)
+                time.sleep(1)
+
+        # 텔레그램 수익률 보고!
+        if now_tm.minute == 0 and 0 <= now_tm.second <= 7:
+            send_report()
+            time.sleep(3)
 
         print('-' * 150)
         time.sleep(1)
