@@ -1,4 +1,5 @@
 import os, sys, time
+import threading
 import traceback
 
 if os.name == 'nt':
@@ -350,10 +351,10 @@ def profit_take_sell(take_yield=10.0):
     for _ticker in _coin_bought_list:
         yield_rate: float = get_yield(_ticker)
         if take_yield < yield_rate:
-            total_qty, used_qty = get_coin_quantity(ticker)
+            total_qty, used_qty = get_coin_quantity(_ticker)
             quantity = total_qty - used_qty
             if quantity > 0:
-                r: bool = sell(ticker, quantity)
+                r: bool = sell(_ticker, quantity)
                 log(f'이익 보전 익절 매도 결과: {r}')
                 time.sleep(0.5)
         time.sleep(0.5)
@@ -363,7 +364,7 @@ def profit_take_sell(take_yield=10.0):
         r_tuple = select_db(sql, _ticker)
         R = r_tuple[0][0]
         print(f'R: {R}')
-        target_price = calc_williams_R(ticker, R)
+        target_price = calc_williams_R(_ticker, R)
         print(f'target_price: {target_price}')
         curr_price = bithumb.get_current_price(_ticker)
         if target_price > curr_price:
@@ -510,18 +511,80 @@ def get_total_yield() -> float:
     return yields
 
 
+class Worker1(threading.Thread):
+    """ 텔레그램 전송 전용 쓰레드 """
+
+    def __init__(self):
+        super().__init__()
+        self.daemon = True
+
+    def run(self):
+        log('텔레그램 전송 전용 쓰레드')
+        calc_ratio_by_ma()
+
+
+class Worker2(threading.Thread):
+    """ 오전 보유코인 시초가 청산 전용 쓰레드 """
+
+    def __init__(self):
+        super().__init__()
+        self.daemon = True
+
+    def run(self):
+        log('보유코인 시초가 청산 전용 쓰레드')
+        sell_all()
+        time.sleep(1)
+
+
+class Worker3(threading.Thread):
+    """ 손절매 감시 쓰레드 """
+
+    def __init__(self, _coin_bought_list, _loss_ratio):
+        super().__init__()
+        self.coin_bought_list = _coin_bought_list
+        self.loss_ratio = _loss_ratio
+        self.daemon = True
+
+    def run(self):
+        log('손절매 감시 쓰레드')
+        for _ticker in self.coin_bought_list:
+            is_loss = check_loss(_ticker, self.loss_ratio)
+            if is_loss:
+                loss_sell(_ticker)
+                time.sleep(1)
+
+
+class Worker4(threading.Thread):
+    """ 매수 전용 쓰레드 """
+
+    def __init__(self, _coin_buy_wish_list, _coin_ratio_list, _coin_r_list, _coin_bought_list):
+        super().__init__()
+        self.coin_buy_wish_list = _coin_buy_wish_list
+        self.coin_ratio_list = _coin_ratio_list
+        self.coin_r_list = _coin_r_list
+        self.coin_bought_list = _coin_bought_list
+        self.daemon = True
+
+    def run(self):
+        log('매수 전용 쓰레드')
+        # 매수하기 - 변동성 돌파
+        for i, ticker in enumerate(self.coin_buy_wish_list):
+            if ticker not in self.coin_bought_list:
+                buy_coin(ticker, self.coin_ratio_list[i], self.coin_r_list[i])
+                time.sleep(1)
+
+
 if __name__ == '__main__':
     # update_coin_buy_wish_list()
-    # calc_ratio_by_ma()
+    calc_ratio_by_ma()
     loss_ratio = -2.0
 
     while True:
-        calc_ratio_by_ma()
         coin_buy_wish_list, coin_ratio_list, coin_r_list = get_buy_wish_list()
         coin_bought_list: list = get_coin_bought_list()
         total_krw, use_krw = get_krw_balance()
         yields: float = get_total_yield()
-        log(f'총원화: {total_krw:,} 사용한 금액: {use_krw:,} \n 추정 총수익률: {round(yields, 3)}%s')
+        log(f'총원화: {total_krw:,} 사용한 금액: {use_krw:,} 추정 총수익률: {round(yields, 3)}%')
         krw_balance = total_krw - use_krw
         today = datetime.now()
 
@@ -545,8 +608,10 @@ if __name__ == '__main__':
 
         if start_sell_tm < now_tm < end_sell_tm:
             log('아침에 포트폴리오 청산')
-            sell_all()
-            time.sleep(1)
+            # sell_all()
+            # time.sleep(1)
+            t2 = Worker2()
+            t2.start()
 
         # 총수익률이  -6 이하일 경우 종목의 손절 비율 올림
         # 목적: 손절라인을 타이트하게 가져가서 마이너스 코인 손절매도 되게 함.
@@ -554,12 +619,15 @@ if __name__ == '__main__':
             loss_ratio = loss_ratio * 0.7
 
         if start_trading_tm < now_tm < end_trading_tm:
-            # if True:
             # 매수하기 - 변동성 돌파
-            for i, ticker in enumerate(coin_buy_wish_list):
-                if ticker not in coin_bought_list:
-                    buy_coin(ticker, coin_ratio_list[i], coin_r_list[i])
-                    time.sleep(1)
+            # for i, ticker in enumerate(coin_buy_wish_list):
+            #     if ticker not in coin_bought_list:
+            #         buy_coin(ticker, coin_ratio_list[i], coin_r_list[i])
+            #         time.sleep(1)
+            t4 = Worker4(coin_buy_wish_list, coin_ratio_list, coin_r_list, coin_bought_list)
+            t4.run()
+
+
         else:
             log('트레이딩 휴식시간(3)')
             time.sleep(3)
@@ -569,15 +637,19 @@ if __name__ == '__main__':
         # time.sleep(0.2)
 
         # 손절매 확인
-        for ticker in coin_bought_list:
-            is_loss = check_loss(ticker, loss_ratio)
-            if is_loss:
-                loss_sell(ticker)
-                time.sleep(1)
+        t3 = Worker3(coin_bought_list, loss_ratio)
+        t3.run()
+        # for ticker in coin_bought_list:
+        #     is_loss = check_loss(ticker, loss_ratio)
+        #     if is_loss:
+        #         # loss_sell(ticker)
+        #         time.sleep(1)
 
-        # 텔레그램 수익률 보고!
+        # 텔레그램 수익률 보고! - 시간당 1회 호출
         if now_tm.minute == 0 and 0 <= now_tm.second <= 7:
             send_report()
+            t1 = Worker1()
+            t1.start()
             time.sleep(3)
 
         print('-' * 150)
