@@ -78,20 +78,22 @@ def save_transaction_history(order_desc: list) -> None:
     """
     order_type = order_desc[0]
     if order_type == 'bid':  # 매수 거래
-        order_type, ticker, order_no, currency, price, quantity, target_price, R, fee, transaction_krw_amount = tuple(
+        order_type, ticker, order_no, currency, price, quantity, target_price, R, fee, \
+        transaction_krw_amount, diff, diff_percent = tuple(
             order_desc)
         sql = 'REPLACE INTO coin_transaction_history ' \
-              ' (order_no, date, ticker, position, price, quantity, target_price, R, fee, transaction_krw_amount)' \
-              ' VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)'
+              ' (order_no, date, ticker, position, price, quantity, target_price, R, fee, transaction_krw_amount, diff, diff_percent)' \
+              ' VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)'
         mutation_db(sql, (order_no, get_today_format(), ticker, order_type, price, quantity, target_price, R, fee,
-                          transaction_krw_amount))
+                          transaction_krw_amount, diff, diff_percent))
     elif order_type == 'ask':  # 매도 거래
-        order_type, ticker, order_no, currency, price, quantity, fee, transaction_krw_amount = tuple(order_desc)
+        order_type, ticker, order_no, currency, price, quantity, fee, transaction_krw_amount, yield_ratio = tuple(
+            order_desc)
         sql = 'REPLACE INTO coin_transaction_history ' \
-              ' (order_no, date, ticker, position, price, quantity, fee, transaction_krw_amount)' \
-              ' VALUES (%s, %s, %s, %s, %s, %s, %s, %s)'
+              ' (order_no, date, ticker, position, price, quantity, fee, transaction_krw_amount, yield_ratio)' \
+              ' VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)'
         mutation_db(sql, (order_no, get_today_format(), ticker, order_type, price, quantity,
-                          fee, transaction_krw_amount))
+                          fee, transaction_krw_amount, yield_ratio))
 
 
 def update_bought_list(ticker: str) -> None:
@@ -106,6 +108,14 @@ def update_bought_list(ticker: str) -> None:
 
 
 def buy_coin(ticker: str, buy_ratio: float, R: float = 0.5) -> None:
+    """
+    코인 매수
+    지정가 매수후 실패시 시장가 매수
+    :param ticker:
+    :param buy_ratio:
+    :param R:
+    :return:
+    """
     try:
         if is_in_market(ticker):
             # print('매수 종목 => ' + ticker)
@@ -130,7 +140,6 @@ def buy_coin(ticker: str, buy_ratio: float, R: float = 0.5) -> None:
                     order_book = pybithumb.get_orderbook(ticker)
                     asks = order_book['asks']
                     ask_price = asks[0]['price']
-                    # log(f'ask_price: {ask_price}')
                     # 지정가 주문 api 불안정
                     order_desc: tuple = buy_limit_price(ticker, ask_price, buy_qty)
                     if type(order_desc) is dict and order_desc['status'] != '0000':
@@ -145,11 +154,16 @@ def buy_coin(ticker: str, buy_ratio: float, R: float = 0.5) -> None:
                     # insert bought list
                     save_bought_list((ticker, order_desc[2]))
                     order_desc = list(order_desc)
-                    order_desc.extend([price, order_qty, target_price, R, fee, transaction_krw_amount])
+                    diff = price - target_price
+                    diff_percent = round(diff / price * 100, 3)
+                    order_desc.extend(
+                        [price, order_qty, target_price, R, fee, transaction_krw_amount, diff, diff_percent])
                     save_transaction_history(order_desc)
                     log(f'매수주문성공: {ticker} {order_desc[2]}')
                     msg = f'[매수알림] {ticker} \n' \
-                          f'가격: {price} 수량: {round(buy_qty, 4)}개'
+                          f'가격: {price} 수량: {round(buy_qty, 4)}개 \n' \
+                          f'슬리피지: {diff} \n' \
+                          f'슬리피지 비율: {round(diff_percent, 3)}%'
                     telegram_bot.send_coin_bot(msg)
                 else:
                     log(f'변동성 돌파 하지 못함: {ticker}')
@@ -158,6 +172,7 @@ def buy_coin(ticker: str, buy_ratio: float, R: float = 0.5) -> None:
     except Exception as e:
         log(f' buy_coin() 예외발생.. 매수실패 {str(e)}')
         traceback.print_exc()
+
 
 def sell_all():
     """
@@ -186,10 +201,12 @@ def sell_all():
                     order_completed_info: tuple = get_my_order_completed_info(order_desc)
                     order_type, _ticker, price, order_qty, fee, transaction_krw_amount = order_completed_info
                     order_desc: list = list(order_desc)
-                    order_desc.extend([price, coin_quantity, fee, transaction_krw_amount])
+                    yield_ratio = get_yield(ticker)
+                    order_desc.extend([price, coin_quantity, fee, transaction_krw_amount, yield_ratio])
                     save_transaction_history(order_desc)
                     msg = f'[청산 매도알림] {ticker} \n' \
-                          f'가격: {price} 수량: {round(order_qty, 4)}개'
+                          f'가격: {price} 수량: {round(order_qty, 4)}개 \n' \
+                          f'수익률: {yield_ratio}%'
                     telegram_bot.send_coin_bot(msg)
                     time.sleep(1)
             time.sleep(0.5)
@@ -214,21 +231,25 @@ def sell(ticker, quantity) -> bool:
     :return:
     """
     log(f'sell() => {ticker} {quantity}개')
+    r = False
     try:
         order_desc: tuple = sell_market_price(ticker, quantity)
         time.sleep(0.1)
         log(f'매도 주문 요청,  order_desc: {order_desc}')
         if type(order_desc) is tuple and order_desc[2]:
+            yield_ratio = get_yield(ticker)
             update_bought_list(ticker)
             order_completed_info: tuple = get_my_order_completed_info(order_desc)
             order_type, _ticker, price, order_qty, fee, transaction_krw_amount = order_completed_info
             order_desc: list = list(order_desc)
-            order_desc.extend([price, quantity, fee, transaction_krw_amount])
+            order_desc.extend([price, quantity, fee, transaction_krw_amount, yield_ratio])
             save_transaction_history(order_desc)
             msg = f'[매도알림] {ticker} \n' \
-                  f'가격: {price} 수량: {order_qty}개'
+                  f'가격: {price} 수량: {order_qty}개 \n' \
+                  f'수익률: {yield_ratio}%'
             telegram_bot.send_coin_bot(msg)
-            return True
+            r = True
+        return r
     except Exception as e:
         log(f'sell() 예외발생! e =>{str(e)}')
         traceback.print_exc()
@@ -247,13 +268,18 @@ def loss_sell(ticker: str):
         coin_yield = get_yield(ticker)
         if (quantity > 0) and (coin_yield < -2.0):
             log(f'{ticker} 손실발생 => {coin_yield}%')
-            sell(ticker, quantity)
+            r: bool = sell(ticker, quantity)
+            print(f'손절매 결과: {r}')
 
 
 def get_yield(ticker: str) -> float:
-    # 매수가격 확인 - DB
+    """
+    수익률 계산하기
+        매수가격 확인하기 위해 거래내역(traction_history 테이블) 에서 order_no 조회후 매수가 산출
+    :param ticker:
+    :return:
+    """
     try:
-        # total_coin, used_coin = get_coin_quantity(ticker)
         sql = 'SELECT order_no FROM coin_bought_list ' \
               ' WHERE is_sell = 0 AND ticker = %s'
         result: tuple = select_db(sql, ticker)
@@ -293,19 +319,22 @@ def check_loss(ticker: str, loss_ratio: float = -2.0) -> bool:
         traceback.print_exc()
 
 
-
 def send_report() -> None:
     """ 텔레그램 봇 수익률 메시지 전송 """
     sql = 'SELECT ticker FROM coin_bought_list WHERE is_sell = 0'
     _bought_list: tuple = select_db(sql)
     _coin_bought_list = [t[0] for t in _bought_list]
     msg = f'[가상화폐 수익률 알림] \n'
+    total_yield = 0
     for _ticker in _coin_bought_list:
         yield_rate: float = get_yield(_ticker)
         msg += f'{_ticker} {yield_rate}% \n'
+        total_yield += yield_rate
 
+    msg += f'총 수익률: {total_yield}'
     if len(_coin_bought_list) == 0:
         msg += '보유 코인 없음'
+
     telegram_bot.send_coin_bot(msg)
 
 
@@ -324,7 +353,8 @@ def profit_take_sell(take_yield=10.0):
             total_qty, used_qty = get_coin_quantity(ticker)
             quantity = total_qty - used_qty
             if quantity > 0:
-                sell(ticker, quantity)
+                r: bool = sell(ticker, quantity)
+                log(f'이익 보전 익절 매도 결과: {r}')
                 time.sleep(0.5)
         time.sleep(0.5)
 
@@ -457,7 +487,11 @@ def update_coin_buy_wish_list() -> None:
 
 
 def get_coin_bought_list() -> list:
-    """"""
+    """
+    당일 코인 매수한 내역 리스트 리턴
+    매도여부 체크X, 당일 해당 코인 매수한 내역 있으면 당일은 다시 매수하지 못하게 함
+
+    """
     sql = 'SELECT ticker FROM coin_bought_list' \
           '  WHERE date = %s ORDER BY ticker ASC'
     _bought_list: tuple = select_db(sql, get_today_format())
@@ -478,10 +512,11 @@ def get_total_yield() -> float:
 
 if __name__ == '__main__':
     # update_coin_buy_wish_list()
-    calc_ratio_by_ma()
+    # calc_ratio_by_ma()
     loss_ratio = -2.0
 
     while True:
+        calc_ratio_by_ma()
         coin_buy_wish_list, coin_ratio_list, coin_r_list = get_buy_wish_list()
         coin_bought_list: list = get_coin_bought_list()
         total_krw, use_krw = get_krw_balance()
@@ -500,18 +535,13 @@ if __name__ == '__main__':
 
         # 트레이딩 시간2 - 오전 포함 TEST
         start_trading_tm = today.replace(hour=0, minute=1, second=0, microsecond=0)
-        end_trading_tm = today.replace(hour=23, minute=30, second=0, microsecond=0)
+        end_trading_tm = today.replace(hour=23, minute=55, second=0, microsecond=0)
         # exit_tm = today.replace(hour=9, minute=0, second=0, microsecond=0)
 
         # 매수희망 종목 새로고침
-        start_update_buy_tickers = today.replace(hour=0, minute=0, second=0, microsecond=0)
-        end_update_buy_tickers = today.replace(hour=0, minute=5, second=0, microsecond=0)
+        # start_update_buy_tickers = today.replace(hour=0, minute=0, second=0, microsecond=0)
+        # end_update_buy_tickers = today.replace(hour=0, minute=5, second=0, microsecond=0)
         now_tm = datetime.now()
-
-        # 상승코인 목록 업데이트
-        if start_update_buy_tickers < now_tm < end_update_buy_tickers:
-            # update_coin_buy_wish_list()
-            calc_ratio_by_ma()
 
         if start_sell_tm < now_tm < end_sell_tm:
             log('아침에 포트폴리오 청산')
@@ -522,8 +552,6 @@ if __name__ == '__main__':
         # 목적: 손절라인을 타이트하게 가져가서 마이너스 코인 손절매도 되게 함.
         if yields < - 6.0:
             loss_ratio = loss_ratio * 0.7
-        # elif loss_ratio > 0:
-        #     loss_ratio = -2.0
 
         if start_trading_tm < now_tm < end_trading_tm:
             # if True:
