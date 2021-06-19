@@ -527,8 +527,8 @@ if __name__ == '__main__':
         today = datetime.now()
 
         # 전일 코인자산 청산 시간
-        start_sell_tm = today.replace(hour=8, minute=40, second=0, microsecond=0)
-        end_sell_tm = today.replace(hour=8, minute=59, second=0, microsecond=0)
+        start_sell_tm = today.replace(hour=11, minute=00, second=0, microsecond=0)
+        end_sell_tm = today.replace(hour=11, minute=10, second=0, microsecond=0)
 
         # 트레이딩 시간
         start_trading_tm = today.replace(hour=0, minute=5, second=0, microsecond=0)
