@@ -8,7 +8,7 @@ from datetime import datetime
 from pandas import DataFrame, Series
 from common import telegram_bot
 from common.bithumb_api import *
-from common.utils import mutation_db, select_db, get_today_format
+from common.utils import mutation_db, select_db, get_today_format, calc_prev_volatility
 
 
 def calc_williams_R(ticker: str, R: float = 0.5) -> float:
@@ -386,41 +386,6 @@ def get_buy_wish_list() -> tuple:
     return _coin_buy_wish_list, _coin_ratio_list, _coin_r_list
 
 
-def calc_ratio_by_ma() -> list:
-    """
-    현재가격이 3, 5, 10, 20일 이동평균 비교하여 포트폴리오 매수 비율 구함
-    :return: 매수할 코인 목록
-    """
-    result = dict()
-    coin_buy_wish_list, coin_ratio_list, coin_r_list = get_buy_wish_list()
-    # print(coin_buy_wish_list)
-    val = 1 / len(coin_buy_wish_list)
-    # val = 0.5 / len(coin_buy_wish_list)  # test 기간 보유비중 1/10 줄임
-    for i, ticker in enumerate(coin_buy_wish_list):
-        MA3 = calc_moving_average_by(ticker, 3)
-        MA5 = calc_moving_average_by(ticker, 5)
-        MA10 = calc_moving_average_by(ticker, 10)
-        MA20 = calc_moving_average_by(ticker, 20)
-        current_price = bithumb.get_current_price(ticker)
-        ratio = 0
-        if current_price > MA3:
-            ratio += 1
-        elif current_price > MA5:
-            ratio += 1
-        elif current_price > MA10:
-            ratio += 1
-        elif current_price > MA20:
-            ratio += 1
-        ratio: float = ratio / 4
-        value = round(val * ratio, 3)
-        coin_ratio_list[i] = value
-        result[ticker] = value
-        sql = 'UPDATE coin_buy_wish_list SET ratio = %s WHERE ticker = %s'
-        mutation_db(sql, (value, ticker))
-    print('포트폴리오 장세의 따른 보유 비율:', result)
-    return [k for k, v in result.items() if v > 0]
-
-
 def get_bull_coin_by(ticker: str, days: int = 5) -> tuple:
     """
     현재 코인티커의 이동평균가격과 윌리엄스R 목표가 돌파했는지 여부 리턴
@@ -514,6 +479,63 @@ def get_total_yield() -> float:
     return yields
 
 
+def calc_ratio_by_ma() -> list:
+    """
+    자금관리: 포트폴리오 보유 비중 계산 with MA
+    현재가격이 3, 5, 10, 20일 이동평균 비교하여 포트폴리오 매수 비율 구함
+    :return: 매수할 코인 목록
+    """
+    result = dict()
+    coin_buy_wish_list, coin_ratio_list, coin_r_list = get_buy_wish_list()
+    # print(coin_buy_wish_list)
+    val = 1 / len(coin_buy_wish_list)
+    # val = 0.5 / len(coin_buy_wish_list)  # test 기간 보유비중 1/10 줄임
+    for i, ticker in enumerate(coin_buy_wish_list):
+        MA3 = calc_moving_average_by(ticker, 3)
+        MA5 = calc_moving_average_by(ticker, 5)
+        MA10 = calc_moving_average_by(ticker, 10)
+        MA20 = calc_moving_average_by(ticker, 20)
+        current_price = bithumb.get_current_price(ticker)
+        ratio = 0
+        if current_price > MA3:
+            ratio += 1
+        elif current_price > MA5:
+            ratio += 1
+        elif current_price > MA10:
+            ratio += 1
+        elif current_price > MA20:
+            ratio += 1
+        ratio: float = ratio / 4
+        value = round(val * ratio, 3)
+        coin_ratio_list[i] = value
+        result[ticker] = value
+        sql = 'UPDATE coin_buy_wish_list SET ratio = %s WHERE ticker = %s'
+        mutation_db(sql, (value, ticker))
+    print('포트폴리오 장세의 따른 보유 비율:', result)
+    return [k for k, v in result.items() if v > 0]
+
+
+def calc_ratio_by_volatility() -> list:
+    """
+    자금관리: 가상화폐 변동성에 높을 경우 보유비중을 줄이고, 변동성이 낮을 경우 보유비중을 높힌다.
+    (감당할수 있는 변동성 / 전일 변동성)  / 투자코인수
+    ex)코인당 2% 하락 ok 라면
+    2 / 7(전일 변동성)  / len(coins)
+    :return: 매수할 코인 목록
+    """
+    coin_buy_wish_list, coin_ratio_list, coin_r_list = get_buy_wish_list()
+    size = len(coin_buy_wish_list)
+    result = {}
+    for ticker in coin_buy_wish_list:
+        prev_volatility = calc_prev_volatility(ticker)
+        value = round((2.0 / prev_volatility) / size, 4)
+        result[ticker] = value
+        sql = 'UPDATE coin_buy_wish_list SET ratio = %s WHERE ticker = %s'
+        mutation_db(sql, (value, ticker))
+    print('포트폴리오 장세의 따른 보유 비율:', result)
+    return [k for k, v in result.items() if v > 0]
+
+
 if __name__ == '__main__':
     # update_coin_buy_wish_list()
     # calc_ratio_by_ma()
@@ -522,6 +544,7 @@ if __name__ == '__main__':
     while True:
         _coin_buy_wish_list, coin_ratio_list, coin_r_list = get_buy_wish_list()
         coin_buy_wish_list = calc_ratio_by_ma()
+        # coin_buy_wish_list = calc_ratio_by_volatility()
         coin_bought_list: list = get_coin_bought_list()
         total_krw, use_krw = get_krw_balance()
         yields: float = get_total_yield()
@@ -530,6 +553,7 @@ if __name__ == '__main__':
         today = datetime.now()
 
         # 전일 코인자산 청산 시간
+        # 마범공식책에서는 시가에 매도.. 밤12시 이겠군. 즉 0시 , 0시 10분 사이 매도?
         start_sell_tm = today.replace(hour=11, minute=00, second=0, microsecond=0)
         end_sell_tm = today.replace(hour=11, minute=10, second=0, microsecond=0)
 
