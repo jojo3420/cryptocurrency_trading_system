@@ -6,3 +6,4 @@ import pybithumb
 
 if __name__ == '__main__':
     print(get_my_coin_balance())
+    print(get_coin_bought_list())

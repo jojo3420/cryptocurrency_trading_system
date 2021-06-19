@@ -181,9 +181,7 @@ def sell_all():
     """
     try:
         while True:
-            sql = 'SELECT ticker FROM coin_bought_list WHERE is_sell = 0'
-            bought_list: tuple = select_db(sql)
-            _coin_bought_list = [t[0] for t in bought_list]
+            _coin_bought_list = get_coin_bought_list()
 
             if len(_coin_bought_list) == 0:
                 log('매도할 코인 없음 => 종료')
@@ -321,9 +319,10 @@ def check_loss(ticker: str, loss_ratio: float = -2.0) -> bool:
 
 def send_report() -> None:
     """ 텔레그램 봇 수익률 메시지 전송 """
-    sql = 'SELECT ticker FROM coin_bought_list WHERE is_sell = 0'
-    _bought_list: tuple = select_db(sql)
-    _coin_bought_list = [t[0] for t in _bought_list]
+    # sql = 'SELECT ticker FROM coin_bought_list WHERE is_sell = 0'
+    # _bought_list: tuple = select_db(sql)
+    # _coin_bought_list = [t[0] for t in _bought_list]
+    _coin_bought_list = get_coin_bought_list()
     msg = f'[가상화폐 수익률 알림] \n'
     total_yield = 0
     for _ticker in _coin_bought_list:
@@ -343,10 +342,12 @@ def profit_take_sell(take_yield=10.0):
     트레일 - 이익 보전 익절 매도
     """
     log(f'이익 보전 익절 매도: {take_yield}%')
-    sql = 'SELECT ticker FROM coin_bought_list ' \
-          ' WHERE is_sell = %s AND date = %s'
-    _bought_list: tuple = select_db(sql, (0, get_today_format()))
-    _coin_bought_list = [t[0] for t in _bought_list]
+    # sql = 'SELECT ticker FROM coin_bought_list ' \
+    #       ' WHERE is_sell = %s AND date = %s'
+    # _bought_list: tuple = select_db(sql, (0, get_today_format()))
+    # _coin_bought_list = [t[0] for t in _bought_list]
+    #
+    _coin_bought_list = get_coin_bought_list()
     for _ticker in _coin_bought_list:
         yield_rate: float = get_yield(_ticker)
         if take_yield < yield_rate:
@@ -493,11 +494,13 @@ def get_coin_bought_list() -> list:
     매도여부 체크X, 당일 해당 코인 매수한 내역 있으면 당일은 다시 매수하지 못하게 함
 
     """
-    sql = 'SELECT ticker FROM coin_bought_list' \
-          '  WHERE date = %s ORDER BY ticker ASC'
-    _bought_list: tuple = select_db(sql, get_today_format())
-    _coin_bought_list = [t[0] for t in _bought_list]
-    return _coin_bought_list
+    # sql = 'SELECT ticker FROM coin_bought_list' \
+    #       '  WHERE date = %s ORDER BY ticker ASC'
+    # _bought_list: tuple = select_db(sql, get_today_format())
+    # _coin_bought_list = [t[0] for t in _bought_list]
+    # return _coin_bought_list
+    balance = get_my_coin_balance()
+    return list(balance.keys())
 
 
 def get_total_yield() -> float:

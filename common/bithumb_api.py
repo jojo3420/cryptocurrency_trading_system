@@ -293,9 +293,12 @@ def get_coin_name(ticker: str) -> str:
         get_coin_name(ticker)
 
 
-def get_my_coin_balance() -> dict:
+def get_my_coin_balance() -> dict or None:
     """ 보유한 코인 장고 조회
     조건: 보유 수량이 0.0001 보다 많으면서 보유한 코인 평가금액이 1000원 이상인 코인
+    return  {'ticker': (total, used, available)}
+    보유한 잔고가 없을경우 빈 dict 리턴
+    통신 오류일 경우 None 리턴
     """
     all_balance = bithumb.get_balance('ALL')
     tickers = pybithumb.get_tickers()
