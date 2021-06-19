@@ -12,7 +12,7 @@ if __name__ == '__main__':
 
     # 시장가 매수
 
-    order_desc = buy_market_price('SUN', 10)
+    order_desc = buy_market_price('KLAY', 3)
     print(order_desc)
 
     # ('bid', 'XRP', 'C0106000000241177047', 'KRW')

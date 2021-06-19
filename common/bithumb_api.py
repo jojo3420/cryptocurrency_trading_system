@@ -1,6 +1,7 @@
 import pybithumb
 import os
 import sys
+
 if os.name == 'nt':
     sys.path.append('C:\\source_code\\python\\cryptocurrency_trading_system')
     sys.path.append('C:\\source_code\\cryptocurrency_trading_system')
@@ -290,6 +291,31 @@ def get_coin_name(ticker: str) -> str:
     else:
         crawling_cryptocurrency_info()
         get_coin_name(ticker)
+
+
+def get_my_coin_balance() -> dict:
+    """ 보유한 코인 장고 조회
+    조건: 보유 수량이 0.0001 보다 많으면서 보유한 코인 평가금액이 1000원 이상인 코인
+    """
+    all_balance = bithumb.get_balance('ALL')
+    tickers = pybithumb.get_tickers()
+    balance = {}
+    if all_balance['status'] == '0000':
+        data = all_balance['data']
+        for ticker in tickers:
+            total = float(data[f'total_{ticker.lower()}'])
+            used = float(data[f'in_use_{ticker.lower()}'])
+            available = total - used
+            if total > 0.0001:
+                curr_price = pybithumb.get_current_price(ticker)
+                if curr_price * total > 1000:
+                    balance[ticker] = (total, used, available)
+        return balance
+    else:
+        log(f"통신오류 => 예외코드: {all_balance['status']}")
+        return None
+
+
 
 
 if __name__ == '__main__':
