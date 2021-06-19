@@ -168,7 +168,7 @@ def buy_coin(ticker: str, buy_ratio: float, R: float = 0.5) -> None:
                 else:
                     log(f'변동성 돌파 하지 못함: {ticker}')
             else:
-                print(f'{ticker} 주문가능 수량이 부족합니다.')
+                log(f'{ticker} 주문가능 수량이 부족합니다. 수량: {buy_qty}')
     except Exception as e:
         log(f' buy_coin() 예외발생.. 매수실패 {str(e)}')
         traceback.print_exc()
@@ -298,7 +298,7 @@ def get_yield(ticker: str) -> float:
                 current_price = bithumb.get_current_price(ticker)
                 yield_rate = (current_price / price - 1) * 100
                 log(f'{ticker} 수익률: {round(yield_rate, 2)}%')
-                return round(yield_rate, 3)
+                return round(yield_rate, 4)
         else:
             return 0
     except Exception as e:
@@ -385,10 +385,10 @@ def get_buy_wish_list() -> tuple:
     return _coin_buy_wish_list, _coin_ratio_list, _coin_r_list
 
 
-def calc_ratio_by_ma():
+def calc_ratio_by_ma() -> list:
     """
     현재가격이 3, 5, 10, 20일 이동평균 비교하여 포트폴리오 매수 비율 구함
-    :return:
+    :return: 매수할 코인 목록
     """
     result = dict()
     coin_buy_wish_list, coin_ratio_list, coin_r_list = get_buy_wish_list()
@@ -417,6 +417,7 @@ def calc_ratio_by_ma():
         sql = 'UPDATE coin_buy_wish_list SET ratio = %s WHERE ticker = %s'
         mutation_db(sql, (value, ticker))
     print('포트폴리오 장세의 따른 보유 비율:', result)
+    return [k for k, v in result.items() if v > 0]
 
 
 def get_bull_coin_by(ticker: str, days: int = 5) -> tuple:
@@ -516,12 +517,12 @@ if __name__ == '__main__':
     loss_ratio = -2.0
 
     while True:
-        calc_ratio_by_ma()
-        coin_buy_wish_list, coin_ratio_list, coin_r_list = get_buy_wish_list()
+        _coin_buy_wish_list, coin_ratio_list, coin_r_list = get_buy_wish_list()
+        coin_buy_wish_list = calc_ratio_by_ma()
         coin_bought_list: list = get_coin_bought_list()
         total_krw, use_krw = get_krw_balance()
         yields: float = get_total_yield()
-        log(f'총원화: {total_krw:,} 사용한 금액: {use_krw:,} \n 추정 총수익률: {round(yields, 3)}%s')
+        log(f'총원화: {total_krw:,} 사용한 금액: {use_krw:,} \n 추정 총수익률: {round(yields, 3)}%')
         krw_balance = total_krw - use_krw
         today = datetime.now()
 
@@ -552,6 +553,10 @@ if __name__ == '__main__':
         # 목적: 손절라인을 타이트하게 가져가서 마이너스 코인 손절매도 되게 함.
         if yields < - 6.0:
             loss_ratio = loss_ratio * 0.7
+            msg = f'계좌 총 수익률 -6% 도달 \n' \
+                  f'손절라인 변경: {loss_ratio}'
+            telegram_bot.send_coin_bot(msg)
+            log(msg)
 
         if start_trading_tm < now_tm < end_trading_tm:
             # if True:
@@ -579,6 +584,10 @@ if __name__ == '__main__':
         if now_tm.minute == 0 and 0 <= now_tm.second <= 7:
             send_report()
             time.sleep(3)
+
+        if len(coin_buy_wish_list) == 0:
+            log('매수할 종목 없음. 하락장은 피하고, 상승장에서만 투자 한다.')
+            time.sleep(60)
 
         print('-' * 150)
         time.sleep(1)
