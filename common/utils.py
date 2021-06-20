@@ -5,7 +5,7 @@ import sys
 from datetime import datetime, timedelta
 import traceback
 import time
-
+from pandas import DataFrame, Series
 if os.name == 'nt':
     sys.path.append('C:\\source_code\\python\\cryptocurrency_trading_system')
     sys.path.append('C:\\source_code\\cryptocurrency_trading_system')
@@ -93,6 +93,45 @@ def get_today_format(format: str = '%Y-%m-%d') -> str:
     today = datetime.today()
     today = today.strftime(format)
     return today
+
+
+
+def calc_williams_R(ticker: str, R: float = 0.5) -> float:
+    """
+    래리 윌리엄스 변동성 돌파 계산하기
+    :param ticker:
+    :param R:
+    :return: target_price
+    """
+    df: DataFrame = pybithumb.get_candlestick(ticker)
+    # print(df.tail())
+    if not df.empty:
+        yesterday_s: Series = df.iloc[-2]
+        today_s: Series = df.iloc[-1]
+        today_open: Series = today_s['open']
+        yesterday_high = yesterday_s['high']
+        yesterday_low = yesterday_s['low']
+        target_price = today_open + (yesterday_high - yesterday_low) * R
+        return target_price
+    return None
+
+
+def calc_moving_average_by(ticker: str, days: int = 3) -> DataFrame:
+    """
+     days 이동평균 구하기 (당일 close  계산에 포함)
+    """
+    try:
+        prices: DataFrame = pybithumb.get_candlestick(ticker)
+        close: Series = prices['close']
+        MA: Series = close.rolling(days).mean()
+        # print(MA.tail())
+        # 당일값 시세를 반영하려면 당일 close 가격이 포함된 당일 이동평균값 -1 사용!
+        # 당일값 시세를 제외하려면 -2 전일 close 가격까지 포함된 전일 이동평균값 -2 사용
+        ma_close_price = MA[-1]
+        return ma_close_price
+    except Exception as e:
+        print(str(e))
+        traceback.print_exc()
 
 
 def calc_now_volatility(ticker: str) -> float:

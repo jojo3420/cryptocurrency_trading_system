@@ -5,49 +5,12 @@ if os.name == 'nt':
     sys.path.append('C:\\source_code\\python\\cryptocurrency_trading_system')
     sys.path.append('C:\\source_code\\cryptocurrency_trading_system')
 from datetime import datetime
-from pandas import DataFrame, Series
+# from pandas import DataFrame, Series
 from common import telegram_bot
 from common.bithumb_api import *
-from common.utils import mutation_db, select_db, get_today_format, calc_prev_volatility
+from common.utils import mutation_db, select_db, get_today_format, calc_prev_volatility, calc_moving_average_by, calc_williams_R
 
 
-def calc_williams_R(ticker: str, R: float = 0.5) -> float:
-    """
-    래리 윌리엄스 변동성 돌파 계산하기
-    :param ticker:
-    :param R:
-    :return: target_price
-    """
-    df: DataFrame = pybithumb.get_candlestick(ticker)
-    # print(df.tail())
-    if not df.empty:
-        yesterday_s: Series = df.iloc[-2]
-        today_s: Series = df.iloc[-1]
-        today_open: Series = today_s['open']
-        yesterday_high = yesterday_s['high']
-        yesterday_low = yesterday_s['low']
-        target_price = today_open + (yesterday_high - yesterday_low) * R
-        return target_price
-    return None
-
-
-def calc_moving_average_by(ticker: str, days: int = 3) -> DataFrame:
-    """
-     이돌평균 구하기 (변형)
-    3일 이동평균: (2일 이동평균값 + 현재가) / 2
-    """
-    try:
-        prices: DataFrame = pybithumb.get_candlestick(ticker)
-        close: Series = prices['close']
-        MA: Series = close.rolling(days).mean()
-        # print(MA.tail())
-        # 당일값 시세를 반영하려면 당일 close 가격이 포함된 당일 이동평균값 -1 사용!
-        # 당일값 시세를 제외하려면 -2 전일 close 가격까지 포함된 전일 이동평균값 -2 사용
-        ma_close_price = MA[-1]
-        return ma_close_price
-    except Exception as e:
-        print(str(e))
-        traceback.print_exc()
 
 
 def save_bought_list(order_desc: tuple) -> None:
@@ -374,7 +337,7 @@ def profit_take_sell(take_yield=10.0):
 
 def get_buy_wish_list() -> tuple:
     sql = 'SELECT ticker, ratio, R FROM coin_buy_wish_list ' \
-          ' WHERE is_active = 1 ORDER BY id'
+          ' WHERE is_active = 1 ORDER BY ratio, R'
     _buy_wish_list: tuple = select_db(sql)
     _coin_buy_wish_list = []
     _coin_ratio_list = []
@@ -479,17 +442,14 @@ def get_total_yield() -> float:
     return yields
 
 
-def calc_ratio_by_ma() -> list:
+def calc_ratio_by_ma(coin_buy_wish_list: list) -> list:
     """
     자금관리: 포트폴리오 보유 비중 계산 with MA
     현재가격이 3, 5, 10, 20일 이동평균 비교하여 포트폴리오 매수 비율 구함
     :return: 매수할 코인 목록
     """
     result = dict()
-    coin_buy_wish_list, coin_ratio_list, coin_r_list = get_buy_wish_list()
-    # print(coin_buy_wish_list)
     val = 1 / len(coin_buy_wish_list)
-    # val = 0.5 / len(coin_buy_wish_list)  # test 기간 보유비중 1/10 줄임
     for i, ticker in enumerate(coin_buy_wish_list):
         MA3 = calc_moving_average_by(ticker, 3)
         MA5 = calc_moving_average_by(ticker, 5)
@@ -515,7 +475,7 @@ def calc_ratio_by_ma() -> list:
     return [k for k, v in result.items() if v > 0]
 
 
-def calc_ratio_by_volatility() -> list:
+def calc_ratio_by_volatility(coin_buy_wish_list: list) -> list:
     """
     자금관리: 가상화폐 변동성에 높을 경우 보유비중을 줄이고, 변동성이 낮을 경우 보유비중을 높힌다.
     (감당할수 있는 변동성 / 전일 변동성)  / 투자코인수
@@ -523,7 +483,6 @@ def calc_ratio_by_volatility() -> list:
     2 / 7(전일 변동성)  / len(coins)
     :return: 매수할 코인 목록
     """
-    coin_buy_wish_list, coin_ratio_list, coin_r_list = get_buy_wish_list()
     size = len(coin_buy_wish_list)
     result = {}
     for ticker in coin_buy_wish_list:
@@ -538,13 +497,11 @@ def calc_ratio_by_volatility() -> list:
 
 if __name__ == '__main__':
     # update_coin_buy_wish_list()
-    # calc_ratio_by_ma()
     loss_ratio = -2.0
 
     while True:
         _coin_buy_wish_list, coin_ratio_list, coin_r_list = get_buy_wish_list()
-        coin_buy_wish_list = calc_ratio_by_ma()
-        # coin_buy_wish_list = calc_ratio_by_volatility()
+        coin_buy_wish_list = calc_ratio_by_ma(_coin_buy_wish_list)
         coin_bought_list: list = get_coin_bought_list()
         total_krw, use_krw = get_krw_balance()
         yields: float = get_total_yield()
@@ -554,21 +511,17 @@ if __name__ == '__main__':
 
         # 전일 코인자산 청산 시간
         # 마범공식책에서는 시가에 매도.. 밤12시 이겠군. 즉 0시 , 0시 10분 사이 매도?
-        start_sell_tm = today.replace(hour=11, minute=00, second=0, microsecond=0)
-        end_sell_tm = today.replace(hour=11, minute=10, second=0, microsecond=0)
+        start_sell_tm = today.replace(hour=8, minute=30, second=0, microsecond=0)
+        end_sell_tm = today.replace(hour=8, minute=40, second=0, microsecond=0)
 
         # 트레이딩 시간
-        start_trading_tm = today.replace(hour=0, minute=5, second=0, microsecond=0)
-        end_trading_tm = today.replace(hour=8, minute=0, second=0, microsecond=0)
+        # start_trading_tm = today.replace(hour=0, minute=5, second=0, microsecond=0)
+        # end_trading_tm = today.replace(hour=8, minute=0, second=0, microsecond=0)
 
         # 트레이딩 시간2 - 오전 포함 TEST
         start_trading_tm = today.replace(hour=0, minute=1, second=0, microsecond=0)
         end_trading_tm = today.replace(hour=23, minute=55, second=0, microsecond=0)
         # exit_tm = today.replace(hour=9, minute=0, second=0, microsecond=0)
-
-        # 매수희망 종목 새로고침
-        # start_update_buy_tickers = today.replace(hour=0, minute=0, second=0, microsecond=0)
-        # end_update_buy_tickers = today.replace(hour=0, minute=5, second=0, microsecond=0)
         now_tm = datetime.now()
 
         if start_sell_tm < now_tm < end_sell_tm:
@@ -586,12 +539,11 @@ if __name__ == '__main__':
             log(msg)
 
         if start_trading_tm < now_tm < end_trading_tm:
-            # if True:
             # 매수하기 - 변동성 돌파
             for i, ticker in enumerate(coin_buy_wish_list):
                 if ticker not in coin_bought_list:
                     buy_coin(ticker, coin_ratio_list[i], coin_r_list[i])
-                    time.sleep(1)
+                    time.sleep(0.5)
         else:
             log('트레이딩 휴식시간(3)')
             time.sleep(3)
@@ -605,7 +557,7 @@ if __name__ == '__main__':
             is_loss = check_loss(ticker, loss_ratio)
             if is_loss:
                 loss_sell(ticker)
-                time.sleep(1)
+                time.sleep(0.5)
 
         # 텔레그램 수익률 보고!
         if now_tm.minute == 0 and 0 <= now_tm.second <= 7:
@@ -617,4 +569,4 @@ if __name__ == '__main__':
             time.sleep(60)
 
         print('-' * 150)
-        time.sleep(1)
+        time.sleep(0.5)
