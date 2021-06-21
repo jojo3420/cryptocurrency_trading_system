@@ -473,7 +473,11 @@ def calc_ratio_by_ma() -> None:
             sql = 'UPDATE coin_buy_wish_list SET ratio = %s WHERE ticker = %s'
             mutation_db(sql, (value, ticker))
         print('포트폴리오 장세의 따른 보유 비율:', result)
-        # return [k for k, v in result.items() if v > 0]
+        _list = [k for k, v in result.items() if v > 0]
+        if len(_list) == 0:
+            log('매수할 종목 없음. 하락장은 피하고, 상승장에서만 투자 한다.')
+            time.sleep(1*60*5)
+
     except Exception as ee:
         print(str(ee))
         traceback.print_exc()
@@ -499,6 +503,53 @@ def calc_ratio_by_volatility() -> None:
     # return [k for k, v in result.items() if v > 0]
 
 
+def modify_R(ticker: str, R: float) -> None:
+    sql = 'UPDATE coin_buy_wish_list SET R = %s WHERE ticker = %s'
+    mutation_db(sql, (R, ticker))
+
+
+def dynamic_change_R() -> None:
+    """
+    시간대별 동적으로 R 변경하기
+    """
+    R1 = None
+    now_tm = datetime.now()
+    log(now_tm)
+    if now_tm.hour == 1 and now_tm.minute == 0 and 0 <= now_tm.second <= 7:
+        # R 1 -> 0.9, 0.7 -> 0.6 변경
+        R1 = 0.45
+    if now_tm.hour == 2 and now_tm.minute == 0 and 0 <= now_tm.second <= 7:
+        # R 0.9 -> 0.8, 0.6 -> 0.5 변경
+        R1 = 0.4
+    if now_tm.hour == 3 and now_tm.minute == 0 and 0 <= now_tm.second <= 7:
+        # R 0.8 -> 0.6, 0.5 -> 0.3 변경
+        R1 = 0.35
+    if now_tm.hour == 4 and now_tm.minute == 0 and 0 <= now_tm.second <= 7:
+        R1 = 0.3
+    if now_tm.hour == 5 and now_tm.minute == 0 and 0 <= now_tm.second <= 7:
+        R1 = 0.2
+    if now_tm.hour == 8 and now_tm.minute == 0 and 0 <= now_tm.second <= 7:
+        R1 = 0.9
+    if now_tm.hour == 9 and now_tm.minute == 0 and 0 <= now_tm.second <= 7:
+        R1 = 1
+    if now_tm.hour == 10 and now_tm.minute == 0 and 0 <= now_tm.second <= 7:
+        R1 = 1.1
+    if now_tm.hour == 11 and now_tm.minute == 0 and 0 <= now_tm.second <= 7:
+        R1 = 1.2
+    if now_tm.hour == 12 and now_tm.minute == 0 and 0 <= now_tm.second <= 7:
+        R1 = 1.3
+    if now_tm.hour == 13 and now_tm.minute == 0 and 0 <= now_tm.second <= 7:
+        R1 = 1.4
+    if now_tm.hour == 14 and now_tm.minute == 0 and 0 <= now_tm.second <= 7:
+        R1 = 1.5
+    msg = f'시간대별 동적으로 R 변경하기: {R1}'
+    print(msg)
+    telegram_bot.send_coin_bot(msg)
+    if R1 is not None:
+        for _symbol in coin_buy_wish_list:
+            modify_R(_symbol, R1)
+
+
 if __name__ == '__main__':
     # update_coin_buy_wish_list()
     calc_ratio_by_ma()
@@ -519,24 +570,21 @@ if __name__ == '__main__':
         end_sell_tm = today.replace(hour=8, minute=40, second=0, microsecond=0)
 
         # 트레이딩 시간
-        # start_trading_tm = today.replace(hour=0, minute=5, second=0, microsecond=0)
-        # end_trading_tm = today.replace(hour=8, minute=0, second=0, microsecond=0)
+        start_good_trading_tm = today.replace(hour=0, minute=5, second=0, microsecond=0)
+        end_good_trading_tm = today.replace(hour=8, minute=0, second=0, microsecond=0)
 
         # 트레이딩 시간2 - 오전 포함 TEST
         start_trading_tm = today.replace(hour=0, minute=1, second=0, microsecond=0)
         end_trading_tm = today.replace(hour=23, minute=55, second=0, microsecond=0)
-        # exit_tm = today.replace(hour=9, minute=0, second=0, microsecond=0)
+
         now_tm = datetime.now()
-
-
 
         if start_sell_tm < now_tm < end_sell_tm:
             log('아침에 포트폴리오 청산')
             sell_all()
             time.sleep(1)
 
-        # 총수익률이  -6 이하일 경우 종목의 손절 비율 올림
-        # 목적: 손절라인을 타이트하게 가져가서 마이너스 코인 손절매도 되게 함.
+        # 총수익률이  -6 이하일 경우 종목의 손절 비율 타이트 만듬
         if yields < - 6.0:
             loss_ratio = loss_ratio * 0.7
             msg = f'계좌 총 수익률 -6% 도달 \n' \
@@ -545,13 +593,18 @@ if __name__ == '__main__':
             log(msg)
 
         if start_trading_tm < now_tm < end_trading_tm:
+            if now_tm.minute == 0 and 0 <= now_tm.second <= 7:
+                dynamic_change_R()
+
             # 매수하기 - 변동성 돌파
             for i, ticker in enumerate(coin_buy_wish_list):
                 if ticker not in coin_bought_list:
                     buy_coin(ticker, coin_ratio_list[i], coin_r_list[i])
                     time.sleep(0.5)
         else:
-            log('트레이딩 휴식시간(3)')
+            for symbol in coin_buy_wish_list:
+                modify_R(symbol, 0.5)
+            log('트레이딩 새로 시작전 휴식시간(3)')
             time.sleep(3)
 
         # 이익보전 - 익절매도
@@ -569,11 +622,7 @@ if __name__ == '__main__':
         if now_tm.minute == 0 and 0 <= now_tm.second <= 7:
             send_report()
             calc_ratio_by_ma()
-            time.sleep(3)
-
-        if len(coin_buy_wish_list) == 0:
-            log('매수할 종목 없음. 하락장은 피하고, 상승장에서만 투자 한다.')
-            time.sleep(60)
+            time.sleep(2)
 
         print('-' * 150)
         time.sleep(0.5)
