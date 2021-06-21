@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import traceback
 import time
 from pandas import DataFrame, Series
+
 if os.name == 'nt':
     sys.path.append('C:\\source_code\\python\\cryptocurrency_trading_system')
     sys.path.append('C:\\source_code\\cryptocurrency_trading_system')
@@ -95,7 +96,6 @@ def get_today_format(format: str = '%Y-%m-%d') -> str:
     return today
 
 
-
 def calc_williams_R(ticker: str, R: float = 0.5) -> float:
     """
     래리 윌리엄스 변동성 돌파 계산하기
@@ -116,7 +116,7 @@ def calc_williams_R(ticker: str, R: float = 0.5) -> float:
     return None
 
 
-def calc_moving_average_by(ticker: str, days: int = 3) -> DataFrame:
+def calc_moving_average_by(ticker: str, days: int = 3) -> float or None:
     """
      days 이동평균 구하기 (당일 close  계산에 포함)
     """

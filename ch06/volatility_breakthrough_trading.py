@@ -8,9 +8,8 @@ from datetime import datetime
 # from pandas import DataFrame, Series
 from common import telegram_bot
 from common.bithumb_api import *
-from common.utils import mutation_db, select_db, get_today_format, calc_prev_volatility, calc_moving_average_by, calc_williams_R
-
-
+from common.utils import mutation_db, select_db, get_today_format, calc_prev_volatility, calc_moving_average_by, \
+    calc_williams_R
 
 
 def save_bought_list(order_desc: tuple) -> None:
@@ -442,40 +441,45 @@ def get_total_yield() -> float:
     return yields
 
 
-def calc_ratio_by_ma(coin_buy_wish_list: list) -> list:
+def calc_ratio_by_ma() -> None:
     """
     자금관리: 포트폴리오 보유 비중 계산 with MA
     현재가격이 3, 5, 10, 20일 이동평균 비교하여 포트폴리오 매수 비율 구함
     :return: 매수할 코인 목록
     """
-    result = dict()
-    val = 1 / len(coin_buy_wish_list)
-    for i, ticker in enumerate(coin_buy_wish_list):
-        MA3 = calc_moving_average_by(ticker, 3)
-        MA5 = calc_moving_average_by(ticker, 5)
-        MA10 = calc_moving_average_by(ticker, 10)
-        MA20 = calc_moving_average_by(ticker, 20)
-        current_price = bithumb.get_current_price(ticker)
-        ratio = 0
-        if current_price > MA3:
-            ratio += 1
-        elif current_price > MA5:
-            ratio += 1
-        elif current_price > MA10:
-            ratio += 1
-        elif current_price > MA20:
-            ratio += 1
-        ratio: float = ratio / 4
-        value = round(val * ratio, 3)
-        coin_ratio_list[i] = value
-        result[ticker] = value
-        sql = 'UPDATE coin_buy_wish_list SET ratio = %s WHERE ticker = %s'
-        mutation_db(sql, (value, ticker))
-    print('포트폴리오 장세의 따른 보유 비율:', result)
-    return [k for k, v in result.items() if v > 0]
+    try:
+        result = dict()
+        coin_buy_wish_list, coin_ratio_list, coin_r_list = get_buy_wish_list()
+        val = 1 / len(coin_buy_wish_list)
+        for i, ticker in enumerate(coin_buy_wish_list):
+            MA3 = calc_moving_average_by(ticker, 3)
+            MA5 = calc_moving_average_by(ticker, 5)
+            MA10 = calc_moving_average_by(ticker, 10)
+            MA20 = calc_moving_average_by(ticker, 20)
+            current_price = bithumb.get_current_price(ticker)
+            ratio = 0
+            if current_price > MA3:
+                ratio += 1
+            elif current_price > MA5:
+                ratio += 1
+            elif current_price > MA10:
+                ratio += 1
+            elif current_price > MA20:
+                ratio += 1
+            ratio: float = ratio / 4
+            value = round(val * ratio, 3)
+            coin_ratio_list[i] = value
+            result[ticker] = value
+            sql = 'UPDATE coin_buy_wish_list SET ratio = %s WHERE ticker = %s'
+            mutation_db(sql, (value, ticker))
+        print('포트폴리오 장세의 따른 보유 비율:', result)
+        # return [k for k, v in result.items() if v > 0]
+    except Exception as ee:
+        print(str(ee))
+        traceback.print_exc()
 
 
-def calc_ratio_by_volatility(coin_buy_wish_list: list) -> list:
+def calc_ratio_by_volatility() -> None:
     """
     자금관리: 가상화폐 변동성에 높을 경우 보유비중을 줄이고, 변동성이 낮을 경우 보유비중을 높힌다.
     (감당할수 있는 변동성 / 전일 변동성)  / 투자코인수
@@ -492,16 +496,16 @@ def calc_ratio_by_volatility(coin_buy_wish_list: list) -> list:
         sql = 'UPDATE coin_buy_wish_list SET ratio = %s WHERE ticker = %s'
         mutation_db(sql, (value, ticker))
     print('포트폴리오 장세의 따른 보유 비율:', result)
-    return [k for k, v in result.items() if v > 0]
+    # return [k for k, v in result.items() if v > 0]
 
 
 if __name__ == '__main__':
     # update_coin_buy_wish_list()
+    calc_ratio_by_ma()
     loss_ratio = -2.0
 
     while True:
-        _coin_buy_wish_list, coin_ratio_list, coin_r_list = get_buy_wish_list()
-        coin_buy_wish_list = calc_ratio_by_ma(_coin_buy_wish_list)
+        coin_buy_wish_list, coin_ratio_list, coin_r_list = get_buy_wish_list()
         coin_bought_list: list = get_coin_bought_list()
         total_krw, use_krw = get_krw_balance()
         yields: float = get_total_yield()
@@ -523,6 +527,8 @@ if __name__ == '__main__':
         end_trading_tm = today.replace(hour=23, minute=55, second=0, microsecond=0)
         # exit_tm = today.replace(hour=9, minute=0, second=0, microsecond=0)
         now_tm = datetime.now()
+
+
 
         if start_sell_tm < now_tm < end_sell_tm:
             log('아침에 포트폴리오 청산')
@@ -562,6 +568,7 @@ if __name__ == '__main__':
         # 텔레그램 수익률 보고!
         if now_tm.minute == 0 and 0 <= now_tm.second <= 7:
             send_report()
+            calc_ratio_by_ma()
             time.sleep(3)
 
         if len(coin_buy_wish_list) == 0:

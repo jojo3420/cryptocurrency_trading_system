@@ -226,7 +226,7 @@ def get_my_order_completed_info(order_desc: tuple) -> tuple:
                     return (order_type, ticker, avg_buy_price, total_order_qty, total_fee, transaction_krw_amount)
             else:
                 log(f'체결된 주문내역 상태 확인필요: {order_status}')
-                return None
+                return get_my_order_completed_info(order_desc)
 
     except Exception as e:
         log(f'체결된 주문 내역 조회 실패 => {str(e)}')
