@@ -512,16 +512,24 @@ def calc_ratio_by_volatility() -> None:
     :return: 매수할 코인 목록
     """
     try:
-        size = len(coin_buy_wish_list)
+        _coin_buy_wish_list, _, __ = get_buy_wish_list()
+        size = len(_coin_buy_wish_list)
         result = {}
-        for ticker in coin_buy_wish_list:
+        target_loss_ratio = 2.0
+        for ticker in _coin_buy_wish_list:
             prev_volatility = calc_prev_volatility(ticker)
-            value = round((2.0 / prev_volatility) / size, 4)
+            value = round((target_loss_ratio / prev_volatility) / size, 4)
             result[ticker] = value
             sql = 'UPDATE coin_buy_wish_list SET ratio = %s WHERE ticker = %s'
             mutation_db(sql, (value, ticker))
-        print('포트폴리오 장세의 따른 보유 비율:', result)
-        # return [k for k, v in result.items() if v > 0]
+        # print('포트폴리오 장세의 따른 보유 비율:', result)
+        # _list = [k for k, v in result.items() if v > 0]
+        msg = f'포트폴리오 장세의 따른 보유 비율:\n'
+        for k, v in result.items():
+            msg += f'{k} {v}%  '
+        log(msg)
+
+
     except Exception as ex:
         log(f'calc_ratio_by_volatility() 예외발생 {str(ex)}')
         traceback.print_exc()
@@ -587,16 +595,18 @@ def dynamic_change_R() -> None:
 
 def trading_rest_time():
     """
-    트레이딩 새로 시작전 휴식시간: 23:55 부터 6분간 휴식
+    트레이딩 새로 시작전 휴식시간 23:55 부터 6분간 초기화
     1) R값 0.5로 초기화
     2)  is_loss_sell 값 0으로 초기화
     :return:
     """
     try:
         log('트레이딩 새로 시작전 휴식시간(10)')
+        # 모틈 코인의 R값 0.5로 초기화
         for symbol in coin_buy_wish_list:
             modify_R(symbol, 0.5)
-        sql = 'UPDATE coin_buy_wish_list SET = is_loss_sell = %s ' \
+        # 손절매 여부 초기화
+        sql = 'UPDATE coin_buy_wish_list SET is_loss_sell = %s ' \
               ' WHERE is_active = %s'
         mutation_db(sql, (0, 1))
     except Exception as ex:
@@ -604,9 +614,18 @@ def trading_rest_time():
         traceback.print_exc()
 
 
+def setup() -> None:
+    """
+    프로그램 시작전 초기화
+    :return:
+    """
+    calc_ratio_by_ma()
+    # calc_ratio_by_volatility()  # 테스트 위해 소량으로 매수 시도해봄.
+
+
 if __name__ == '__main__':
     try:
-        calc_ratio_by_ma()
+        setup()
         loss_ratio = -2.0
         while True:
             coin_buy_wish_list, coin_ratio_list, coin_r_list = get_buy_wish_list()
@@ -672,6 +691,7 @@ if __name__ == '__main__':
             if now_tm.minute == 0 and 0 <= now_tm.second <= 7:
                 send_report()
                 calc_ratio_by_ma()
+                # calc_ratio_by_volatility()
                 time.sleep(2)
 
             print('-' * 150)
