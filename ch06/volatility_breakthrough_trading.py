@@ -334,7 +334,7 @@ def send_report() -> None:
 
 def get_buy_wish_list() -> tuple:
     sql = 'SELECT ticker, ratio, R FROM coin_buy_wish_list ' \
-          ' WHERE is_active = %s ANS is_loss_sell = %s ORDER BY ratio, R'
+          ' WHERE is_active = %s AND is_loss_sell = %s ORDER BY ratio, R'
     _buy_wish_list: tuple = select_db(sql, (1, 0))
     _coin_buy_wish_list = []
     _coin_ratio_list = []
