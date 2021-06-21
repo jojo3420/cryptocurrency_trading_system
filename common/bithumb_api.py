@@ -10,6 +10,7 @@ from common.utils import log, select_db, mutation_many
 import traceback
 import requests
 from bs4 import BeautifulSoup
+from pandas import DataFrame
 
 
 def read_bithumb_key(filepath: str) -> dict:
@@ -318,6 +319,34 @@ def get_my_coin_balance() -> dict or None:
         log(f"통신오류 => 예외코드: {all_balance['status']}")
         return None
 
+
+def get_prev_volume(ticker: str) -> float or None:
+    """
+    이전 거래일 거래량
+    :param ticker:
+    :return: 거래량
+    """
+    prices: DataFrame = pybithumb.get_candlestick(ticker)
+    if not prices.empty:
+        # print(prices.tail())
+        volume = prices['volume']
+        return volume.iloc[-1]
+    return None
+
+
+def calc_prev_ma_volume(ticker: str, days: int = 5) -> float or None:
+    """
+    거래량 이동평균 값(당일 제외)
+    :param ticker:
+    :param days:
+    :return: 거래량
+    """
+    prices: DataFrame = pybithumb.get_candlestick(ticker)
+    if not prices.empty:
+        # print(prices.tail(6))
+        volume = prices['volume']
+        MA = volume.rolling(window=days).mean()
+        return MA[-2]
 
 
 

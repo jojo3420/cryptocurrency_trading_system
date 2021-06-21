@@ -134,6 +134,22 @@ def calc_moving_average_by(ticker: str, days: int = 3) -> float or None:
         traceback.print_exc()
 
 
+def calc_prev_moving_average_by(ticker: str, days: int = 3) -> float or None:
+    """
+    기준일 이동평균 구하기 (당일 close 가격 제외한 이동평균)
+    :param ticker:
+    :param days:
+    :return:
+    """
+    prices: DataFrame = pybithumb.get_candlestick(ticker)
+    if not prices.empty:
+        close = prices['close']
+        # print(close.tail(6))
+        MA = close.rolling(window=days).mean()
+        return MA[-2]
+    return None
+
+
 def calc_now_volatility(ticker: str) -> float:
     """ 당일 코인의 1일 변동성 계산
     :param ticker: 코인티커

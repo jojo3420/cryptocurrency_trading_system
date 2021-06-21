@@ -9,7 +9,7 @@ from datetime import datetime
 from common import telegram_bot
 from common.bithumb_api import *
 from common.utils import mutation_db, select_db, get_today_format, calc_prev_volatility, calc_moving_average_by, \
-    calc_williams_R
+    calc_williams_R, calc_prev_moving_average_by
 
 
 def save_bought_list(order_desc: tuple) -> None:
@@ -104,11 +104,16 @@ def buy_coin(ticker: str, buy_ratio: float, R: float = 0.5) -> None:
             current_price = pybithumb.get_current_price(ticker)
             # 종목별 주문 금액 계산(원으로 계산됨)
             available_amount = int(buy_cash * buy_ratio)
+            # log(f'매수에 쓸 돈: {ticker} {available_amount:,}')
             buy_qty: float = available_amount / current_price
             # if buy_qty > min_order_quantity:
             if buy_qty > 0:
                 target_price = calc_williams_R(ticker, R)
+                # 현재 close 시가 포함된 이동평균
                 MA3 = calc_moving_average_by(ticker, 3)
+                # MA3_V = calc_prev_ma_volume(ticker, 3)  # 3일 평균 거래량
+                # prev_volume = get_prev_volume(ticker)   # 이전 거래일 거래량
+                # AND (if prev_volume > MA3_V)
                 if (current_price > target_price) and (current_price > MA3):
                     log(f'변동성 돌파 AND 3일 이동평균 돌파 => target_price: {target_price:,}, {buy_qty}개')
                     order_book = pybithumb.get_orderbook(ticker)
@@ -465,6 +470,9 @@ def calc_ratio_by_ma() -> None:
     """
     자금관리: 포트폴리오 보유 비중 계산 with MA
     현재가격이 3, 5, 10, 20일 이동평균 비교하여 포트폴리오 매수 비율 구함
+    이동평균
+    당일 시가 포함 이평: calc_moving_average_by(),
+    당일 close 시가 제외 이평: calc_prev_moving_average_by()
     :return: 매수할 코인 목록
     """
     try:
@@ -472,6 +480,7 @@ def calc_ratio_by_ma() -> None:
         coin_buy_wish_list, coin_ratio_list, coin_r_list = get_buy_wish_list()
         val = 1 / len(coin_buy_wish_list)
         for i, ticker in enumerate(coin_buy_wish_list):
+            # 당일 시세가격 제외된 이동평균
             MA3 = calc_moving_average_by(ticker, 3)
             MA5 = calc_moving_average_by(ticker, 5)
             MA10 = calc_moving_average_by(ticker, 10)
@@ -492,6 +501,7 @@ def calc_ratio_by_ma() -> None:
             result[ticker] = value
             sql = 'UPDATE coin_buy_wish_list SET ratio = %s WHERE ticker = %s'
             mutation_db(sql, (value, ticker))
+
         print('포트폴리오 장세의 따른 보유 비율:', result)
         _list = [k for k, v in result.items() if v > 0]
         if len(_list) == 0:
@@ -556,32 +566,30 @@ def dynamic_change_R() -> None:
         now_tm = datetime.now()
         log(now_tm)
         if now_tm.hour == 1 and now_tm.minute == 0 and 0 <= now_tm.second <= 7:
-            # R 1 -> 0.9, 0.7 -> 0.6 변경
-            R1 = 0.45
-        if now_tm.hour == 2 and now_tm.minute == 0 and 0 <= now_tm.second <= 7:
-            # R 0.9 -> 0.8, 0.6 -> 0.5 변경
-            R1 = 0.4
-        if now_tm.hour == 3 and now_tm.minute == 0 and 0 <= now_tm.second <= 7:
-            # R 0.8 -> 0.6, 0.5 -> 0.3 변경
-            R1 = 0.35
-        if now_tm.hour == 4 and now_tm.minute == 0 and 0 <= now_tm.second <= 7:
+            # 새벽 1시
             R1 = 0.3
-        if now_tm.hour == 5 and now_tm.minute == 0 and 0 <= now_tm.second <= 7:
+        if now_tm.hour == 2 and now_tm.minute == 0 and 0 <= now_tm.second <= 7:
+            # 새벽 2시
             R1 = 0.2
+        if now_tm.hour == 3 and now_tm.minute == 0 and 0 <= now_tm.second <= 7:
+            # 새벽 3시
+            R1 = 0.1
+        if now_tm.hour == 4 and now_tm.minute == 0 and 0 <= now_tm.second <= 7:
+            # 새벽 4
+            R1 = 0
+        if now_tm.hour == 7 and now_tm.minute == 0 and 0 <= now_tm.second <= 7:
+            R1 = 0.5
         if now_tm.hour == 8 and now_tm.minute == 0 and 0 <= now_tm.second <= 7:
-            R1 = 0.9
+            R1 = 0.6
         if now_tm.hour == 9 and now_tm.minute == 0 and 0 <= now_tm.second <= 7:
-            R1 = 1
-        if now_tm.hour == 10 and now_tm.minute == 0 and 0 <= now_tm.second <= 7:
-            R1 = 1.1
-        if now_tm.hour == 11 and now_tm.minute == 0 and 0 <= now_tm.second <= 7:
-            R1 = 1.2
-        if now_tm.hour == 12 and now_tm.minute == 0 and 0 <= now_tm.second <= 7:
-            R1 = 1.3
-        if now_tm.hour == 13 and now_tm.minute == 0 and 0 <= now_tm.second <= 7:
-            R1 = 1.4
-        if now_tm.hour == 14 and now_tm.minute == 0 and 0 <= now_tm.second <= 7:
-            R1 = 1.5
+            R1 = 0.7
+        # if now_tm.hour == 10 and now_tm.minute == 0 and 0 <= now_tm.second <= 7:
+        #     R1 = 0.8
+        # if now_tm.hour == 11 and now_tm.minute == 0 and 0 <= now_tm.second <= 7:
+        #     R1 = 0.9
+        # if now_tm.hour == 12 and now_tm.minute == 0 and 0 <= now_tm.second <= 7:
+        #     R1 = 1
+
         msg = f'시간대별 동적으로 R 변경하기: {R1}'
         print(msg)
         telegram_bot.send_coin_bot(msg)
@@ -619,8 +627,8 @@ def setup() -> None:
     프로그램 시작전 초기화
     :return:
     """
-    calc_ratio_by_ma()
-    # calc_ratio_by_volatility()  # 테스트 위해 소량으로 매수 시도해봄.
+    # calc_ratio_by_ma()
+    calc_ratio_by_volatility()  # 테스트 위해 소량으로 매수 시도해봄.
 
 
 if __name__ == '__main__':
@@ -690,8 +698,8 @@ if __name__ == '__main__':
             # 텔레그램 수익률 보고!
             if now_tm.minute == 0 and 0 <= now_tm.second <= 7:
                 send_report()
-                calc_ratio_by_ma()
-                # calc_ratio_by_volatility()
+                # calc_ratio_by_ma()
+                calc_ratio_by_volatility()
                 time.sleep(2)
 
             print('-' * 150)
