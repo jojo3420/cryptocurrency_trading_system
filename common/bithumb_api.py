@@ -10,7 +10,7 @@ from common.utils import log, select_db, mutation_many
 import traceback
 import requests
 from bs4 import BeautifulSoup
-from pandas import DataFrame
+from pandas import DataFrame, Series
 
 
 def read_bithumb_key(filepath: str) -> dict:
@@ -347,6 +347,30 @@ def calc_prev_ma_volume(ticker: str, days: int = 5) -> float or None:
         volume = prices['volume']
         MA = volume.rolling(window=days).mean()
         return MA[-2]
+
+
+def calc_noise_ma_by(ticker: str, days: int = 30) -> float:
+    """
+    실시간 이동 평균 노이즈값 계산
+    (당일 가격정보 포함됨)
+    개별 노이즈 공식
+        1 - abs(시가 - 종가) / (고가 - 저가)
+    :param ticker:
+    :param days:
+    :return:
+    """
+    prices: DataFrame = pybithumb.get_candlestick(ticker)
+    if not prices.empty:
+        # print(prices.tail(10))
+        # 당일 노이즈 값
+        noise: Series = 1 - abs(prices['open'] - prices['close']) / (prices['high'] - prices['low'])
+        print(noise.tail(days))
+        # return noise[-1]
+        MA_noise = noise.rolling(window=days).mean()
+        # print(MA_noise.tail(days))
+        return MA_noise[-1]
+    else:
+        raise ValueError('가격 데이터(DataFrame) 비어있습니다.')
 
 
 

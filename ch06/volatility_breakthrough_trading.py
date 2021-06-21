@@ -501,13 +501,11 @@ def calc_ratio_by_ma() -> None:
             result[ticker] = value
             sql = 'UPDATE coin_buy_wish_list SET ratio = %s WHERE ticker = %s'
             mutation_db(sql, (value, ticker))
-
         print('포트폴리오 장세의 따른 보유 비율:', result)
         _list = [k for k, v in result.items() if v > 0]
         if len(_list) == 0:
             log('매수할 종목 없음. 하락장은 피하고, 상승장에서만 투자 한다.')
             time.sleep(1 * 60 * 5)
-
     except Exception as ee:
         print(str(ee))
         traceback.print_exc()
@@ -538,8 +536,6 @@ def calc_ratio_by_volatility() -> None:
         for k, v in result.items():
             msg += f'{k} {v}%  '
         log(msg)
-
-
     except Exception as ex:
         log(f'calc_ratio_by_volatility() 예외발생 {str(ex)}')
         traceback.print_exc()
@@ -622,6 +618,10 @@ def trading_rest_time():
         traceback.print_exc()
 
 
+
+
+
+
 def setup() -> None:
     """
     프로그램 시작전 초기화
@@ -678,7 +678,8 @@ if __name__ == '__main__':
                 # 매수하기 - 변동성 돌파
                 for i, ticker in enumerate(coin_buy_wish_list):
                     if ticker not in coin_bought_list:
-                        buy_coin(ticker, coin_ratio_list[i], coin_r_list[i])
+                        noise_R = calc_noise_ma_by(ticker, 20)
+                        buy_coin(ticker, coin_ratio_list[i], noise_R)
                         time.sleep(0.5)
             else:
                 trading_rest_time()
