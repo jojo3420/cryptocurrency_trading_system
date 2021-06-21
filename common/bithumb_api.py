@@ -334,4 +334,6 @@ if __name__ == '__main__':
     # order3 = bithumb.buy_market_order('XRP', 1)
     # print(order3)
 
-    crawling_cryptocurrency_info('CHZ')
+    # crawling_cryptocurrency_info('CHZ')
+    print(f'get_my_coin_balance() {get_my_coin_balance()}')
+

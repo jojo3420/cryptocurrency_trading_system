@@ -216,6 +216,19 @@ def sell(ticker, quantity) -> bool:
         return False
 
 
+def check_loss(ticker: str, loss_ratio: float = -2.0) -> bool:
+    # print(f'손절매 대상 확인: {ticker}')
+    try:
+        yield_rate: float = get_yield(ticker)
+        if yield_rate < loss_ratio:
+            log(f'마이너스 수익률 발생 => {ticker} {yield_rate}%')
+            return True
+        return False
+    except Exception as e:
+        log(f' check_loss() 예외발생.. {str(e)}')
+        traceback.print_exc()
+
+
 def loss_sell(ticker: str):
     """
     손절매 시장가 매도하기
@@ -230,6 +243,8 @@ def loss_sell(ticker: str):
             log(f'{ticker} 손실발생 => {coin_yield}%')
             r: bool = sell(ticker, quantity)
             print(f'손절매 결과: {r}')
+            sql = 'UPDATE coin_buy_wish_list SET is_loss_sell = %s WHERE ticker = %s'
+            mutation_db(sql, (1, ticker))
 
 
 def get_yield(ticker: str) -> float:
@@ -260,22 +275,10 @@ def get_yield(ticker: str) -> float:
                 log(f'{ticker} 수익률: {round(yield_rate, 2)}%')
                 return round(yield_rate, 4)
         else:
+            log(f'order_no 조회 결과 없음 {result}')
             return 0
     except Exception as e:
         log(f' get_yield() 예외발생.. {str(e)}')
-        traceback.print_exc()
-
-
-def check_loss(ticker: str, loss_ratio: float = -2.0) -> bool:
-    # print(f'손절매 대상 확인: {ticker}')
-    try:
-        yield_rate: float = get_yield(ticker)
-        if yield_rate < loss_ratio:
-            log(f'마이너스 수익률 발생 => {ticker} {yield_rate}%')
-            return True
-        return False
-    except Exception as e:
-        log(f' check_loss() 예외발생.. {str(e)}')
         traceback.print_exc()
 
 
@@ -299,45 +302,40 @@ def send_report() -> None:
     telegram_bot.send_coin_bot(msg)
 
 
-def profit_take_sell(take_yield=10.0):
-    """
-    트레일 - 이익 보전 익절 매도
-    """
-    log(f'이익 보전 익절 매도: {take_yield}%')
-    # sql = 'SELECT ticker FROM coin_bought_list ' \
-    #       ' WHERE is_sell = %s AND date = %s'
-    # _bought_list: tuple = select_db(sql, (0, get_today_format()))
-    # _coin_bought_list = [t[0] for t in _bought_list]
-    #
-    _coin_bought_list = get_coin_bought_list()
-    for _ticker in _coin_bought_list:
-        yield_rate: float = get_yield(_ticker)
-        if take_yield < yield_rate:
-            total_qty, used_qty = get_coin_quantity(ticker)
-            quantity = total_qty - used_qty
-            if quantity > 0:
-                r: bool = sell(ticker, quantity)
-                log(f'이익 보전 익절 매도 결과: {r}')
-                time.sleep(0.5)
-        time.sleep(0.5)
-
-    for _ticker in _coin_bought_list:
-        sql = 'SELECT R FROM coin_buy_wish_list WHERE ticker = %s'
-        r_tuple = select_db(sql, _ticker)
-        R = r_tuple[0][0]
-        print(f'R: {R}')
-        target_price = calc_williams_R(ticker, R)
-        print(f'target_price: {target_price}')
-        curr_price = bithumb.get_current_price(_ticker)
-        if target_price > curr_price:
-            log('돌파 실패로 매도해야 하나?')
-        time.sleep(0.5)
+# def profit_take_sell(take_yield=10.0):
+#     """
+#     트레일 - 이익 보전 익절 매도
+#     """
+#     log(f'이익 보전 익절 매도: {take_yield}%')
+#     _coin_bought_list = get_coin_bought_list()
+#     for _ticker in _coin_bought_list:
+#         yield_rate: float = get_yield(_ticker)
+#         if take_yield < yield_rate:
+#             total_qty, used_qty = get_coin_quantity(ticker)
+#             quantity = total_qty - used_qty
+#             if quantity > 0:
+#                 r: bool = sell(ticker, quantity)
+#                 log(f'이익 보전 익절 매도 결과: {r}')
+#                 time.sleep(0.5)
+#         time.sleep(0.5)
+#
+#     for _ticker in _coin_bought_list:
+#         sql = 'SELECT R FROM coin_buy_wish_list WHERE ticker = %s '
+#         r_tuple = select_db(sql, _ticker)
+#         R = r_tuple[0][0]
+#         print(f'R: {R}')
+#         target_price = calc_williams_R(ticker, R)
+#         print(f'target_price: {target_price}')
+#         curr_price = bithumb.get_current_price(_ticker)
+#         if target_price > curr_price:
+#             log('돌파 실패로 매도해야 하나?')
+#         time.sleep(0.5)
 
 
 def get_buy_wish_list() -> tuple:
     sql = 'SELECT ticker, ratio, R FROM coin_buy_wish_list ' \
-          ' WHERE is_active = 1 ORDER BY ratio, R'
-    _buy_wish_list: tuple = select_db(sql)
+          ' WHERE is_active = %s ANS is_loss_sell = %s ORDER BY ratio, R'
+    _buy_wish_list: tuple = select_db(sql, (1, 0))
     _coin_buy_wish_list = []
     _coin_ratio_list = []
     _coin_r_list = []
@@ -396,38 +394,31 @@ def find_bull_market_list() -> list:
     return bull_tickers
 
 
-def update_coin_buy_wish_list() -> None:
-    """
-    상승장 코인들을 찾아서 매수 희망 리스트에 DB 저장
-    (기존 매수희망 리스트 삭제)
-    :return: None
-    """
-    bull_tickers = find_bull_market_list()
-    # 시가 총액순.?
-    sql = 'DELETE FROM coin_buy_wish_list WHERE 1=1'
-    mutation_db(sql)
-    rows = []
-    sql = 'REPLACE INTO coin_buy_wish_list ' \
-          ' (ticker, name, ratio, R, is_active) ' \
-          ' VALUES (%s, %s, %s, %s, %s) '
-    for symbol in bull_tickers:
-        rows.append((symbol, get_coin_name(symbol), 1 / len(bull_tickers), 0.2, 1))
-    mutation_many(sql, rows)
+# def update_coin_buy_wish_list() -> None:
+#     """
+#     상승장 코인들을 찾아서 매수 희망 리스트에 DB 저장
+#     (기존 매수희망 리스트 삭제)
+#     :return: None
+#     """
+#     bull_tickers = find_bull_market_list()
+#     # 시가 총액순.?
+#     sql = 'DELETE FROM coin_buy_wish_list WHERE 1=1'
+#     mutation_db(sql)
+#     rows = []
+#     sql = 'REPLACE INTO coin_buy_wish_list ' \
+#           ' (ticker, name, ratio, R, is_active) ' \
+#           ' VALUES (%s, %s, %s, %s, %s) '
+#     for symbol in bull_tickers:
+#         rows.append((symbol, get_coin_name(symbol), 1 / len(bull_tickers), 0.2, 1))
+#     mutation_many(sql, rows)
 
 
 def get_coin_bought_list() -> list:
     """
-    당일 코인 매수한 내역 리스트 리턴
-    매도여부 체크X, 당일 해당 코인 매수한 내역 있으면 당일은 다시 매수하지 못하게 함
-
+    현재 코인 보유 리스트 with bithumb
     """
-    # sql = 'SELECT ticker FROM coin_bought_list' \
-    #       '  WHERE date = %s ORDER BY ticker ASC'
-    # _bought_list: tuple = select_db(sql, get_today_format())
-    # _coin_bought_list = [t[0] for t in _bought_list]
-    # return _coin_bought_list
-    balance = get_my_coin_balance()
-    return list(balance.keys())
+    coin_balance = get_my_coin_balance()
+    return list(coin_balance.keys())
 
 
 def get_total_yield() -> float:
@@ -476,7 +467,7 @@ def calc_ratio_by_ma() -> None:
         _list = [k for k, v in result.items() if v > 0]
         if len(_list) == 0:
             log('매수할 종목 없음. 하락장은 피하고, 상승장에서만 투자 한다.')
-            time.sleep(1*60*5)
+            time.sleep(1 * 60 * 5)
 
     except Exception as ee:
         print(str(ee))
@@ -504,6 +495,9 @@ def calc_ratio_by_volatility() -> None:
 
 
 def modify_R(ticker: str, R: float) -> None:
+    """
+        변동성 돌파 상수 R 값 변경
+    """
     sql = 'UPDATE coin_buy_wish_list SET R = %s WHERE ticker = %s'
     mutation_db(sql, (R, ticker))
 
@@ -550,8 +544,22 @@ def dynamic_change_R() -> None:
             modify_R(_symbol, R1)
 
 
+def trading_rest_time():
+    """
+    트레이딩 새로 시작전 휴식시간: 23:55 부터 6분간 휴식
+    1) R값 0.5로 초기화
+    2)  is_loss_sell 값 0으로 초기화
+    :return:
+    """
+    log('트레이딩 새로 시작전 휴식시간(10)')
+    for symbol in coin_buy_wish_list:
+        modify_R(symbol, 0.5)
+    sql = 'UPDATE coin_buy_wish_list SET = is_loss_sell = %s ' \
+          ' WHERE is_active = %s'
+    mutation_db(sql, (0, 1))
+
+
 if __name__ == '__main__':
-    # update_coin_buy_wish_list()
     calc_ratio_by_ma()
     loss_ratio = -2.0
 
@@ -595,17 +603,14 @@ if __name__ == '__main__':
         if start_trading_tm < now_tm < end_trading_tm:
             if now_tm.minute == 0 and 0 <= now_tm.second <= 7:
                 dynamic_change_R()
-
             # 매수하기 - 변동성 돌파
             for i, ticker in enumerate(coin_buy_wish_list):
                 if ticker not in coin_bought_list:
                     buy_coin(ticker, coin_ratio_list[i], coin_r_list[i])
                     time.sleep(0.5)
         else:
-            for symbol in coin_buy_wish_list:
-                modify_R(symbol, 0.5)
-            log('트레이딩 새로 시작전 휴식시간(3)')
-            time.sleep(3)
+            trading_rest_time()
+            time.sleep(1 * 60)
 
         # 이익보전 - 익절매도
         # profit_take_sell(10.0)
