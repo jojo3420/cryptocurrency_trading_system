@@ -579,17 +579,11 @@ def dynamic_change_R() -> None:
             R1 = 0.6
         if now_tm.hour == 9 and now_tm.minute == 0 and 0 <= now_tm.second <= 7:
             R1 = 0.7
-        # if now_tm.hour == 10 and now_tm.minute == 0 and 0 <= now_tm.second <= 7:
-        #     R1 = 0.8
-        # if now_tm.hour == 11 and now_tm.minute == 0 and 0 <= now_tm.second <= 7:
-        #     R1 = 0.9
-        # if now_tm.hour == 12 and now_tm.minute == 0 and 0 <= now_tm.second <= 7:
-        #     R1 = 1
-
-        msg = f'시간대별 동적으로 R 변경하기: {R1}'
-        print(msg)
-        telegram_bot.send_coin_bot(msg)
         if R1 is not None:
+            msg = f'시간대별 동적으로 R 변경하기: {R1}'
+            print(msg)
+            telegram_bot.send_coin_bot(msg)
+
             for _symbol in coin_buy_wish_list:
                 modify_R(_symbol, R1)
     except Exception as ex:
@@ -673,8 +667,8 @@ if __name__ == '__main__':
                 log(msg)
 
             if start_trading_tm < now_tm < end_trading_tm:
-                if now_tm.minute == 0 and 0 <= now_tm.second <= 7:
-                    dynamic_change_R()
+                # if now_tm.minute == 0 and 0 <= now_tm.second <= 7:
+                    # dynamic_change_R()
                 # 매수하기 - 변동성 돌파
                 for i, ticker in enumerate(coin_buy_wish_list):
                     if ticker not in coin_bought_list:

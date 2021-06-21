@@ -364,7 +364,7 @@ def calc_noise_ma_by(ticker: str, days: int = 30) -> float:
         # print(prices.tail(10))
         # 당일 노이즈 값
         noise: Series = 1 - abs(prices['open'] - prices['close']) / (prices['high'] - prices['low'])
-        print(noise.tail(days))
+        # print(noise.tail(days))
         # return noise[-1]
         MA_noise = noise.rolling(window=days).mean()
         # print(MA_noise.tail(days))
