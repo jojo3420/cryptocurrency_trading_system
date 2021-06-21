@@ -326,12 +326,17 @@ def get_prev_volume(ticker: str) -> float or None:
     :param ticker:
     :return: 거래량
     """
-    prices: DataFrame = pybithumb.get_candlestick(ticker)
-    if not prices.empty:
-        # print(prices.tail())
-        volume = prices['volume']
-        return volume.iloc[-1]
-    return None
+    try:
+        prices: DataFrame = pybithumb.get_candlestick(ticker)
+        if not prices.empty:
+            # print(prices.tail())
+            volume = prices['volume']
+            return volume.iloc[-1]
+        return None
+    except Exception as E:
+        msg = f'get_prev_volume() 예외 발생. 시스템 종료되었음. {str(E)}'
+        log(msg)
+        traceback.print_exc()
 
 
 def calc_prev_ma_volume(ticker: str, days: int = 5) -> float or None:
@@ -341,12 +346,17 @@ def calc_prev_ma_volume(ticker: str, days: int = 5) -> float or None:
     :param days:
     :return: 거래량
     """
-    prices: DataFrame = pybithumb.get_candlestick(ticker)
-    if not prices.empty:
-        # print(prices.tail(6))
-        volume = prices['volume']
-        MA = volume.rolling(window=days).mean()
-        return MA[-2]
+    try:
+        prices: DataFrame = pybithumb.get_candlestick(ticker)
+        if not prices.empty:
+            # print(prices.tail(6))
+            volume = prices['volume']
+            MA = volume.rolling(window=days).mean()
+            return MA[-2]
+    except Exception as E:
+        msg = f'calc_prev_ma_volume() 예외 발생. 시스템 종료되었음. {str(E)}'
+        log(msg)
+        traceback.print_exc()
 
 
 def calc_noise_ma_by(ticker: str, days: int = 30) -> float:
@@ -359,19 +369,24 @@ def calc_noise_ma_by(ticker: str, days: int = 30) -> float:
     :param days:
     :return:
     """
-    prices: DataFrame = pybithumb.get_candlestick(ticker)
-    if not prices.empty:
-        # print(prices.tail(10))
-        # 당일 노이즈 값
-        noise: Series = 1 - abs(prices['open'] - prices['close']) / (prices['high'] - prices['low'])
-        # print(noise.tail(days))
-        # return noise[-1]
-        MA_noise = noise.rolling(window=days).mean()
-        # print(MA_noise.tail(days))
-        return MA_noise[-1]
-    else:
-        raise ValueError('가격 데이터(DataFrame) 비어있습니다.')
-
+    try:
+        prices: DataFrame = pybithumb.get_candlestick(ticker)
+        if not prices.empty:
+            # print(prices.tail(10))
+            # 당일 노이즈 값
+            noise: Series = 1 - abs(prices['open'] - prices['close']) / (prices['high'] - prices['low'])
+            # print(noise.tail(days))
+            # return noise[-1]
+            MA_noise = noise.rolling(window=days).mean()
+            # print(MA_noise.tail(days))
+            return MA_noise[-1]
+        else:
+            raise ValueError('가격 데이터(DataFrame) 비어있습니다.')
+    except Exception as E:
+        msg = f'calc_noise_ma_by() 예외 발생. 시스템 종료되었음. {str(E)}'
+        log(msg)
+        traceback.print_exc()
+        return 0.5
 
 
 if __name__ == '__main__':
@@ -389,4 +404,3 @@ if __name__ == '__main__':
 
     # crawling_cryptocurrency_info('CHZ')
     print(f'get_my_coin_balance() {get_my_coin_balance()}')
-
