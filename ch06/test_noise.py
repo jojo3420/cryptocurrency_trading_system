@@ -23,6 +23,38 @@ def money_management(ticker: str) -> None:
 if __name__ == '__main__':
     pandas.set_option('display.max_rows', None)
     # 30일 노이즈 이동평균값
-    noise = calc_noise_ma_by('BTC', 20)
-    print(f'BTC noise: {noise}')
+    # MA3_NOISE = calc_noise_ma_by('BTC', 3)
+    # MA5_NOISE = calc_noise_ma_by('BTC', 5)
+    # MA10_NOISE = calc_noise_ma_by('BTC', 10)
+    # MA20_NOISE = calc_noise_ma_by('BTC', 20)
+    # print(f'MA3_NOISE: {MA3_NOISE}\n'
+    #       f'MA5_NOISE: {MA5_NOISE}\n'
+    #       f'MA10_NOISE: {MA10_NOISE}\n'
+    #       f'MA20_NOISE: {MA20_NOISE}')
+    #
+    # print(f'current_noise: {get_prev_noise("BTC")}')
+
+
+    # while True:
+    #     print(f'current_noise: {get_current_noise("BTC")}')
+    #     time.sleep(1)
+
+    tickers = pybithumb.get_tickers()
+    # for ticker in tickers:
+    #     noise = get_current_noise(ticker)
+    #     # print(f'noise: {curr_noise}')
+    #     # noise = calc_noise_ma_by(ticker, 3)
+    #     if noise < 0.3:
+    #         print(f'추세적인 코인 {ticker}')
+    #     # print(f'{ticker} 추세 평균 {calc_average_ma_by(ticker)}')
+
+
+    for ticker in ['BTC', 'ETH', 'XRP', 'XLM', 'LTC', 'EOS', 'ADA', 'BCH']:
+        is_bull = is_bull_market(ticker)
+        if is_bull:
+            print(f'상승장: {ticker} {is_bull}')
+        else:
+            print(f'상승장 아님: {ticker}')
+
+
 

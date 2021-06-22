@@ -46,17 +46,18 @@ def save_transaction_history(order_desc: list) -> None:
         order_type = order_desc[0]
         if order_type == 'bid':  # 매수 거래
             order_type, ticker, order_no, currency, price, quantity, target_price, R, fee, \
-            transaction_krw_amount, diff, diff_percent = tuple(
+            transaction_krw_amount, diff, diff_percent, noise, noise_desc = tuple(
                 order_desc)
-            sql = 'REPLACE INTO coin_transaction_history ' \
-                  ' (order_no, date, ticker, position, price, quantity, target_price, R, fee, transaction_krw_amount, diff, diff_percent)' \
-                  ' VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)'
+            sql = 'INSERT INTO coin_transaction_history ' \
+                  ' (order_no, date, ticker, position, price, quantity, target_price, R, fee, transaction_krw_amount, diff, diff_percent,' \
+                  'noise, noise_desc)' \
+                  ' VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)'
             mutation_db(sql, (order_no, get_today_format(), ticker, order_type, price, quantity, target_price, R, fee,
-                              transaction_krw_amount, diff, diff_percent))
+                              transaction_krw_amount, diff, diff_percent, noise, noise_desc))
         elif order_type == 'ask':  # 매도 거래
             order_type, ticker, order_no, currency, price, quantity, fee, transaction_krw_amount, yield_ratio = tuple(
                 order_desc)
-            sql = 'REPLACE INTO coin_transaction_history ' \
+            sql = 'INSERT INTO coin_transaction_history ' \
                   ' (order_no, date, ticker, position, price, quantity, fee, transaction_krw_amount, yield_ratio)' \
                   ' VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)'
             mutation_db(sql, (order_no, get_today_format(), ticker, order_type, price, quantity,
@@ -116,6 +117,11 @@ def buy_coin(ticker: str, buy_ratio: float, R: float = 0.5) -> None:
                 # AND (if prev_volume > MA3_V)
                 if (current_price > target_price) and (current_price > MA3):
                     log(f'변동성 돌파 AND 3일 이동평균 돌파 => target_price: {target_price:,}, {buy_qty}개')
+                    MA3_NOISE = calc_noise_ma_by(ticker, 3)
+                    # current_noise = get_current_noise(ticker)
+                    noise_desc = '추세'
+                    if MA3_NOISE > 0.55:
+                        noise_desc = '비추세'
                     order_book = pybithumb.get_orderbook(ticker)
                     asks = order_book['asks']
                     ask_price = asks[0]['price']
@@ -136,7 +142,8 @@ def buy_coin(ticker: str, buy_ratio: float, R: float = 0.5) -> None:
                     diff = price - target_price
                     diff_percent = round(diff / price * 100, 3)
                     order_desc.extend(
-                        [price, order_qty, target_price, R, fee, transaction_krw_amount, diff, diff_percent])
+                        [price, order_qty, target_price, R, fee, transaction_krw_amount, diff, diff_percent,
+                         MA3_NOISE, noise_desc])
                     save_transaction_history(order_desc)
                     log(f'매수주문성공: {ticker} {order_desc[2]}')
                     msg = f'[매수알림] {ticker} \n' \
@@ -370,6 +377,7 @@ def get_buy_wish_list() -> tuple:
     except Exception as ex:
         log(f'get_buy_wish_list() 예외발생 {str(ex)}')
         traceback.print_exc()
+        return [], [], []
 
 
 def get_bull_coin_by(ticker: str, days: int = 5) -> tuple:
@@ -449,6 +457,7 @@ def get_coin_bought_list() -> list:
     except Exception as ex:
         log(f'get_coin_bought_list() 예외발생 {str(ex)}')
         traceback.print_exc()
+        return []
 
 
 def get_total_yield() -> float:
@@ -464,6 +473,7 @@ def get_total_yield() -> float:
     except Exception as ex:
         log(f'get_total_yield() 예외발생 {str(ex)}')
         traceback.print_exc()
+        return 0.0
 
 
 def calc_ratio_by_ma() -> None:
@@ -511,12 +521,59 @@ def calc_ratio_by_ma() -> None:
         traceback.print_exc()
 
 
+def is_bull_market(ticker: str) -> bool:
+    """
+    상승장 기준 체크
+    :param ticker:
+    :return:
+    """
+    try:
+        current_noise = get_current_noise(ticker)
+        MA3_NOISE = calc_noise_ma_by(ticker, 3)
+        curr_price = pybithumb.get_current_price(ticker)
+        prices = pybithumb.get_candlestick(ticker)
+        MA3 = calc_moving_average_by(ticker, 3)
+        MA5 = calc_moving_average_by(ticker, 5)
+        MA10 = calc_moving_average_by(ticker, 10)
+        MA20 = calc_moving_average_by(ticker, 20)
+        val = 0
+        if curr_price > MA3:
+            val += 1
+        if curr_price > MA5:
+            val += 1
+        if curr_price > MA10:
+            val += 1
+        if curr_price > MA20:
+            val += 1
+        value = val / 4
+
+        if not prices.empty:
+            close = prices['close']
+            open = prices['open']
+            prev_close = close.iloc[-2]
+            open_price = open.iloc[-1]
+            # print(close.tail())
+            # 현재가가 어제 종가보다 크고 오늘 시가 보다 크면서, 당일 노이즈가 0.3 보다 작고
+            if curr_price > prev_close and curr_price > open_price \
+                    and current_noise <= 0.3 and MA3_NOISE < 0.4 and value >= 1:
+                print('현재가가 어제종가 보다 크고, 오늘 시가보다 크면서 \n'
+                      '당일 노이즈 3.0이하 3일평균 노이즈가 0.4 미만일 경우\n'
+                      '동시에 3, 5, 10, 20일 이평선 위에 가격에 있으면 상승장으로 판단')
+                return True
+            else:
+                return False
+    except Exception as X:
+        log(f'is_bull_market() 예외 {str(X)}')
+        traceback.print_exc()
+        return False
+
 def calc_ratio_by_volatility() -> None:
     """
-    자금관리: 가상화폐 변동성에 높을 경우 보유비중을 줄이고, 변동성이 낮을 경우 보유비중을 높힌다.
+    자금관리: 가상화폐 변동성에 높을 경우 보유비중을 줄이고,
+            변동성이 낮을 경우 보유비중을 높힌다.
     (감당할수 있는 변동성 / 전일 변동성)  / 투자코인수
     ex)코인당 2% 하락 ok 라면
-    2 / 7(전일 변동성)  / len(coins)
+    2% / 7%(전일 변동성)  / len(buy_wish_list)
     :return: 매수할 코인 목록
     """
     try:
@@ -612,17 +669,26 @@ def trading_rest_time():
         traceback.print_exc()
 
 
-
-
-
-
 def setup() -> None:
     """
     프로그램 시작전 초기화
     :return:
     """
-    # calc_ratio_by_ma()
-    calc_ratio_by_volatility()  # 테스트 위해 소량으로 매수 시도해봄.
+    try:
+        # calc_ratio_by_ma()
+        calc_ratio_by_volatility()  # 테스트 위해 소량으로 매수 시도해봄.
+        _coin_buy_wish_list, _, __ = get_buy_wish_list()
+        for t in _coin_buy_wish_list:
+            is_bull: bool = is_bull_market(t)
+            if is_bull:
+                msg = f'상승장: {t} {is_bull}'
+                print(msg)
+                telegram_bot.send_coin_bot(msg)
+            else:
+                print(f'상승장 아님: {t}')
+
+    except Exception as e:
+        log(f'setup() 예외 e: {str(e)}')
 
 
 if __name__ == '__main__':
@@ -667,13 +733,13 @@ if __name__ == '__main__':
                 log(msg)
 
             if start_trading_tm < now_tm < end_trading_tm:
-                # if now_tm.minute == 0 and 0 <= now_tm.second <= 7:
-                    # dynamic_change_R()
+                if now_tm.minute == 0 and 0 <= now_tm.second <= 7:
+                    dynamic_change_R()
                 # 매수하기 - 변동성 돌파
                 for i, ticker in enumerate(coin_buy_wish_list):
                     if ticker not in coin_bought_list:
-                        noise_R = calc_noise_ma_by(ticker, 20)
-                        buy_coin(ticker, coin_ratio_list[i], noise_R)
+                        # noise_R = calc_noise_ma_by(ticker, 20)
+                        buy_coin(ticker, coin_ratio_list[i], coin_r_list[i])
                         time.sleep(0.5)
             else:
                 trading_rest_time()

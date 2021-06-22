@@ -47,10 +47,15 @@ def get_krw_balance() -> tuple:
     보유 원화 금액 조회하기
     :return: 주문 가능 금액
     """
-    _balance = bithumb.get_balance('BTC')
-    _total_coin, _coin_use_quantity, total_krw, _buy_use_krw = _balance
-    # print(f'{total_krw:,}')
-    return int(total_krw), int(_buy_use_krw)
+    try:
+        _balance = bithumb.get_balance('BTC')
+        _total_coin, _coin_use_quantity, total_krw, _buy_use_krw = _balance
+        # print(f'{total_krw:,}')
+        return int(total_krw), int(_buy_use_krw)
+    except Exception as e:
+        log(f'get_krw_balance() 예외 발생:  {str(e)}')
+        traceback.print_exc()
+        return 0, 0
 
 
 def calc_buy_quantity(ticker: str) -> float:
@@ -60,22 +65,27 @@ def calc_buy_quantity(ticker: str) -> float:
     :param ticker: 코인티커
     :return: quantity: 주문 가능한 수량
     """
-    active_ticker: list = pybithumb.get_tickers()
-    if ticker in active_ticker:
-        total_krw, use_krw = get_krw_balance()
-        order_krw = total_krw - use_krw
-        # print(f'보유 원화: {total_krw:,}')
-        orderbook: dict = pybithumb.get_orderbook(ticker)
-        # 매도 호가
-        asks: list = orderbook['asks']
-        if (len(asks) > 0) and (order_krw > 0):
-            min_sell_price: float = asks[0]['price']
-            # print(min_sell_price)
-            quantity: float = order_krw / min_sell_price
-            return quantity
+    try:
+        active_ticker: list = pybithumb.get_tickers()
+        if ticker in active_ticker:
+            total_krw, use_krw = get_krw_balance()
+            order_krw = total_krw - use_krw
+            # print(f'보유 원화: {total_krw:,}')
+            orderbook: dict = pybithumb.get_orderbook(ticker)
+            # 매도 호가
+            asks: list = orderbook['asks']
+            if (len(asks) > 0) and (order_krw > 0):
+                min_sell_price: float = asks[0]['price']
+                # print(min_sell_price)
+                quantity: float = order_krw / min_sell_price
+                return quantity
+    except Exception as e:
+        log(f'calc_buy_quantity() 예외 발생:  {str(e)}')
+        traceback.print_exc()
+        return 0
 
 
-def buy_limit_price(ticker: str, price: float, quantity: float) -> tuple:
+def buy_limit_price(ticker: str, price: float, quantity: float) -> tuple or None:
     """
     지정가 매수 주문
     :param ticker:
@@ -84,23 +94,27 @@ def buy_limit_price(ticker: str, price: float, quantity: float) -> tuple:
     :return: 주문 정보 ('bid', 'XLM', 'C0504000000166659595', 'KRW')
         주문타입, 코인티커, 주문번호, 주문 통화
     """
-    if ticker in pybithumb.get_tickers():
-        # 지정가 주문
-        total_krw, use_krw = get_krw_balance()
-        order_krw = total_krw - use_krw
-        orderbook = pybithumb.get_orderbook(ticker)
-        asks = orderbook['asks']
-        possible_order_quantity = order_krw / asks[0]['price']
-        if len(asks) > 0 and order_krw > 0:
-            if possible_order_quantity >= quantity:
-                order = bithumb.buy_limit_order(ticker, price, quantity)
-                return order
+    try:
+        if ticker in pybithumb.get_tickers():
+            # 지정가 주문
+            total_krw, use_krw = get_krw_balance()
+            order_krw = total_krw - use_krw
+            orderbook = pybithumb.get_orderbook(ticker)
+            asks = orderbook['asks']
+            possible_order_quantity = order_krw / asks[0]['price']
+            if len(asks) > 0 and order_krw > 0:
+                if possible_order_quantity >= quantity:
+                    order = bithumb.buy_limit_order(ticker, price, quantity)
+                    return order
+                else:
+                    log('주문가능 수량보다 더 많은 수량을 주문했습니다.')
+                    log(f'quantity: {quantity}, possible_order_quantity: {possible_order_quantity} ')
+                    return None
             else:
-                log('주문가능 수량보다 더 많은 수량을 주문했습니다.')
-                log(f'quantity: {quantity}, possible_order_quantity: {possible_order_quantity} ')
-                return None
-        else:
-            log('주문 호가가 존재하지 않습니다.')
+                log('주문 호가가 존재하지 않습니다.')
+    except Exception as e:
+        log(f'buy_limit_price() 예외 발생:  {str(e)}')
+        traceback.print_exc()
 
 
 def buy_market_price(ticker: str, quantity: float) -> tuple:
@@ -120,21 +134,24 @@ def buy_market_price(ticker: str, quantity: float) -> tuple:
             if len(asks) > 0:
                 order_no = bithumb.buy_market_order(ticker, quantity)
                 return order_no
-        return None
     except Exception as e:
-        log(f'시장가 매수주문 예외 발생:  {str(e)}')
+        log(f'buy_market_price() 예외 발생:  {str(e)}')
         traceback.print_exc()
 
 
-def get_coin_quantity(ticker: str):
+def get_coin_quantity(ticker: str) -> tuple:
     """
      코인 잔고 조회
     :param ticker: 코인티커
     :return: (총 보유수랑, 매수/매도에 사용된 수량)
     """
-    if ticker in pybithumb.get_tickers():
-        coin_total, coin_use, krw_total, krw_use = bithumb.get_balance(ticker)
-        return coin_total, coin_use
+    try:
+        if is_in_market(ticker):
+            total_coin, used_coin, _krw_total, _krw_use = bithumb.get_balance(ticker)
+            return total_coin, used_coin
+    except Exception as e:
+        log(f'get_coin_quantity() 예외 발생:  {str(e)}')
+        traceback.print_exc()
 
 
 def sell_market_price(ticker: str, quantity: float) -> tuple:
@@ -146,8 +163,8 @@ def sell_market_price(ticker: str, quantity: float) -> tuple:
     try:
         coin_total, coin_use = get_coin_quantity(ticker)
         order_coin_qty = coin_total - coin_use
-        orderbook: dict = bithumb.get_orderbook(ticker)
-        bids: list = orderbook['bids']
+        order_book: dict = bithumb.get_orderbook(ticker)
+        bids: list = order_book['bids']
         if len(bids) > 0:
             if order_coin_qty >= quantity:
                 order = bithumb.sell_market_order(ticker, quantity)  # 시장가 매도
@@ -158,6 +175,7 @@ def sell_market_price(ticker: str, quantity: float) -> tuple:
             log(f'매수 호가가 존재하지 않습니다. {bids}')
     except Exception as e:
         log('지정가 매도 주문 실패 => ', str(e))
+        traceback.print_exc()
 
 
 def sell_limit_price(ticker: str, price: float, quantity: float) -> tuple:
@@ -387,6 +405,53 @@ def calc_noise_ma_by(ticker: str, days: int = 30) -> float:
         log(msg)
         traceback.print_exc()
         return 0.5
+
+
+def calc_average_ma_by(ticker) -> float:
+    try:
+        prices: DataFrame = pybithumb.get_candlestick(ticker)
+        if not prices.empty:
+            # print(prices.tail(10))
+            noise: Series = 1 - abs(prices['open'] - prices['close']) / (prices['high'] - prices['low'])
+            avg = noise.sum() / noise.size
+            return avg
+        else:
+            raise ValueError('가격 데이터(DataFrame) 비어있습니다.')
+    except Exception as E:
+        msg = f'calc_noise_ma_by() 예외 발생. 시스템 종료되었음. {str(E)}'
+        log(msg)
+        traceback.print_exc()
+
+
+def get_prev_noise(ticker: str) -> float:
+    """ 이전거래일 노이즈값 """
+    try:
+        prices: DataFrame = pybithumb.get_candlestick(ticker)
+        if not prices.empty:
+            # 당일 노이즈 값
+            noise: Series = 1 - abs(prices['open'] - prices['close']) / (prices['high'] - prices['low'])
+            # print(noise.tail(10))
+            return noise[-2]
+    except Exception as E:
+        msg = f'calc_noise_ma_by() 예외 발생. 시스템 종료되었음. {str(E)}'
+        log(msg)
+        traceback.print_exc()
+
+
+def get_current_noise(ticker: str) -> float:
+    """ 현재 코인의 노이즈 값"""
+    try:
+        prices: DataFrame = pybithumb.get_candlestick(ticker)
+        if not prices.empty:
+            # print(prices.tail(10))
+            # 당일 노이즈 값
+            noise: Series = 1 - abs(prices['open'] - prices['close']) / (prices['high'] - prices['low'])
+            # print(noise.tail())
+            return noise[-1]
+    except Exception as E:
+        msg = f'calc_noise_ma_by() 예외 발생. 시스템 종료되었음. {str(E)}'
+        log(msg)
+        traceback.print_exc()
 
 
 if __name__ == '__main__':
