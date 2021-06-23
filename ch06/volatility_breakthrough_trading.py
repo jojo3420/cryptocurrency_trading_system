@@ -727,13 +727,16 @@ def trading_rest_time():
     """
     try:
         log('트레이딩 새로 시작전 휴식시간(10)')
-        # 모틈 코인의 R값 0.5로 초기화
-        for symbol in coin_buy_wish_list:
-            modify_R(symbol, 0.5)
         # 손절매 여부 초기화
         sql = 'UPDATE coin_buy_wish_list SET is_loss_sell = %s ' \
               ' WHERE is_active = %s'
         mutation_db(sql, (0, 1))
+
+        coin_buy_wish_list, _, __ = get_buy_wish_list()
+        for symbol in coin_buy_wish_list:
+            R = calc_R(symbol, 0.5)
+            modify_R(symbol, R)
+
     except Exception as ex:
         log(f'trading_rest_time() 예외발생 {str(ex)}')
         traceback.print_exc()
@@ -813,7 +816,7 @@ if __name__ == '__main__':
                         trailing_stop(ticker)
             else:
                 trading_rest_time()
-                time.sleep(1 * 30)
+                time.sleep(1 * 10)
 
             # 손절매 확인
             for ticker in coin_bought_list:
@@ -827,9 +830,10 @@ if __name__ == '__main__':
                 calc_ratio_by_volatility()
                 time.sleep(2)
 
+            # 매수 종목 없으면 강제 휴식
             if len(coin_buy_wish_list) == 0:
-                log('매수할 코인 없음. 휴식 30초')
-                time.sleep(30)
+                log('매수할 코인 없음. 휴식 10초')
+                time.sleep(10)
 
             print('-' * 150)
             time.sleep(1)
