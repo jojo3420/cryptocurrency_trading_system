@@ -567,6 +567,28 @@ def is_bull_market(ticker: str) -> bool:
         traceback.print_exc()
         return False
 
+
+def calc_R(symbol: str, sub_R: float) -> float:
+    """
+    윌리엄스 R에 사용할 R 값 구하기(당일 노이즈 가중치)
+    공식
+    R = (당일 노이즈 + 3MA 노이즈) / 2
+    :param symbol: 코인티커
+    :param sub_R: 예외발생시 기존 R 값 리턴
+    :return: R
+    """
+    try:
+        MA3_R = calc_noise_ma_by(symbol, 3)
+        curr_noise = get_current_noise(symbol)
+        R = round((MA3_R + curr_noise) / 2, 3)
+        return R
+    except Exception as E:
+        log_msg = f'trailing_stop() 예외발생 {symbol} -> {str(E)}'
+        log(log_msg)
+        traceback.print_exc()
+        return sub_R
+
+
 def calc_ratio_by_volatility() -> None:
     """
     자금관리: 가상화폐 변동성에 높을 경우 보유비중을 줄이고,
@@ -705,13 +727,12 @@ if __name__ == '__main__':
             today = datetime.now()
 
             # 전일 코인자산 청산 시간
-            # 마범공식책에서는 시가에 매도.. 밤12시 이겠군. 즉 0시 , 0시 10분 사이 매도?
-            start_sell_tm = today.replace(hour=8, minute=30, second=0, microsecond=0)
-            end_sell_tm = today.replace(hour=8, minute=40, second=0, microsecond=0)
+            start_sell_tm = today.replace(hour=23, minute=55, second=1, microsecond=0)
+            end_sell_tm = today.replace(hour=23, minute=59, second=59, microsecond=0)
 
             # 트레이딩 시간
-            start_good_trading_tm = today.replace(hour=0, minute=5, second=0, microsecond=0)
-            end_good_trading_tm = today.replace(hour=8, minute=0, second=0, microsecond=0)
+            # start_good_trading_tm = today.replace(hour=0, minute=5, second=0, microsecond=0)
+            # end_good_trading_tm = today.replace(hour=8, minute=0, second=0, microsecond=0)
 
             # 트레이딩 시간2 - 오전 포함 TEST
             start_trading_tm = today.replace(hour=0, minute=1, second=0, microsecond=0)
@@ -720,7 +741,7 @@ if __name__ == '__main__':
             now_tm = datetime.now()
 
             if start_sell_tm < now_tm < end_sell_tm:
-                log('아침에 포트폴리오 청산')
+                log('포트폴리오 모두 청산!')
                 sell_all()
                 time.sleep(1)
 
@@ -738,8 +759,8 @@ if __name__ == '__main__':
                 # 매수하기 - 변동성 돌파
                 for i, ticker in enumerate(coin_buy_wish_list):
                     if ticker not in coin_bought_list:
-                        # noise_R = calc_noise_ma_by(ticker, 20)
-                        buy_coin(ticker, coin_ratio_list[i], coin_r_list[i])
+                        R = calc_R(ticker, coin_r_list[i])
+                        buy_coin(ticker, coin_ratio_list[i], R)
                         time.sleep(0.5)
             else:
                 trading_rest_time()
