@@ -813,7 +813,7 @@ if __name__ == '__main__':
                         trailing_stop(ticker)
             else:
                 trading_rest_time()
-                time.sleep(1 * 60)
+                time.sleep(1 * 30)
 
             # 손절매 확인
             for ticker in coin_bought_list:
@@ -828,7 +828,7 @@ if __name__ == '__main__':
                 time.sleep(2)
 
             if len(coin_buy_wish_list) == 0:
-                log('매수할 코인 없음. 휴식 10분')
+                log('매수할 코인 없음. 휴식 30초')
                 time.sleep(30)
 
             print('-' * 150)
