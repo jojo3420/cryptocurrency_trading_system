@@ -829,7 +829,7 @@ if __name__ == '__main__':
 
             if len(coin_buy_wish_list) == 0:
                 log('매수할 코인 없음. 휴식 10분')
-                time.sleep(60 * 10)
+                time.sleep(60 * 1)
 
             print('-' * 150)
             time.sleep(1)
