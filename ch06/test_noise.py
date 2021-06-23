@@ -23,15 +23,19 @@ def money_management(ticker: str) -> None:
 if __name__ == '__main__':
     pandas.set_option('display.max_rows', None)
     # 30일 노이즈 이동평균값
-    # MA3_NOISE = calc_noise_ma_by('BTC', 3)
-    # MA5_NOISE = calc_noise_ma_by('BTC', 5)
-    # MA10_NOISE = calc_noise_ma_by('BTC', 10)
-    # MA20_NOISE = calc_noise_ma_by('BTC', 20)
-    # print(f'MA3_NOISE: {MA3_NOISE}\n'
-    #       f'MA5_NOISE: {MA5_NOISE}\n'
-    #       f'MA10_NOISE: {MA10_NOISE}\n'
-    #       f'MA20_NOISE: {MA20_NOISE}')
-    #
+    ticker = 'XRP'
+    current_noise = get_current_noise(ticker)
+    MA3_NOISE = calc_noise_ma_by(ticker, 3)
+    MA5_NOISE = calc_noise_ma_by(ticker, 5)
+    MA10_NOISE = calc_noise_ma_by(ticker, 10)
+    MA20_NOISE = calc_noise_ma_by(ticker, 20)
+    print(
+        f'curr_noise: {current_noise}\n'
+        f'MA3_NOISE: {MA3_NOISE}\n'
+          f'MA5_NOISE: {MA5_NOISE}\n'
+          f'MA10_NOISE: {MA10_NOISE}\n'
+          f'MA20_NOISE: {MA20_NOISE}')
+
     # print(f'current_noise: {get_prev_noise("BTC")}')
 
 
@@ -49,12 +53,14 @@ if __name__ == '__main__':
     #     # print(f'{ticker} 추세 평균 {calc_average_ma_by(ticker)}')
 
 
-    for ticker in ['BTC', 'ETH', 'XRP', 'XLM', 'LTC', 'EOS', 'ADA', 'BCH']:
-        is_bull = is_bull_market(ticker)
-        if is_bull:
-            print(f'상승장: {ticker} {is_bull}')
-        else:
-            print(f'상승장 아님: {ticker}')
+    # for ticker in [ticker, 'ETH', 'XRP', 'XLM', 'LTC', 'EOS', 'ADA', 'BCH']:
+    #     is_bull = is_bull_market(ticker)
+    #     if is_bull:
+    #         print(f'상승장: {ticker} {is_bull}')
+    #     else:
+    #         print(f'상승장 아님: {ticker}')
+
+    print(get_coin_bought_list())
 
 
 
