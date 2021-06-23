@@ -827,6 +827,10 @@ if __name__ == '__main__':
                 calc_ratio_by_volatility()
                 time.sleep(2)
 
+            if len(coin_buy_wish_list) == 0:
+                log('매수할 코인 없음. 휴식 10분')
+                time.sleep(60 * 10)
+
             print('-' * 150)
             time.sleep(1)
     except Exception as e:
