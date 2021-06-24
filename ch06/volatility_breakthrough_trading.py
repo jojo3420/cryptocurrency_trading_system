@@ -708,9 +708,8 @@ def dynamic_change_R() -> None:
             R1 = 0.7
         if R1 is not None:
             msg = f'시간대별 동적으로 R 변경하기: {R1}'
-            print(msg)
+            log(msg)
             telegram_bot.send_coin_bot(msg)
-
             for _symbol in coin_buy_wish_list:
                 modify_R(_symbol, R1)
     except Exception as ex:
@@ -732,9 +731,9 @@ def trading_rest_time():
               ' WHERE is_active = %s'
         mutation_db(sql, (0, 1))
 
-        coin_buy_wish_list, _, __ = get_buy_wish_list()
-        for symbol in coin_buy_wish_list:
-            R = calc_R(symbol, 0.5)
+        coin_buy_wish_list, _coin_ratio_list, _coin_r_list = get_buy_wish_list()
+        for idx, symbol in enumerate(coin_buy_wish_list):
+            R = calc_R(symbol, _coin_r_list(idx))
             modify_R(symbol, R)
 
     except Exception as ex:
