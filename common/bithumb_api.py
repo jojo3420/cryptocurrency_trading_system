@@ -389,7 +389,7 @@ def calc_noise_ma_by(ticker: str, days: int = 30) -> float:
     """
     try:
         prices: DataFrame = pybithumb.get_candlestick(ticker)
-        if not prices.empty:
+        if type(prices) is not None and not prices.empty:
             # print(prices.tail(10))
             # 당일 노이즈 값
             noise: Series = 1 - abs(prices['open'] - prices['close']) / (prices['high'] - prices['low'])
@@ -439,7 +439,9 @@ def get_prev_noise(ticker: str) -> float:
 
 
 def get_current_noise(ticker: str) -> float:
-    """ 현재 코인의 노이즈 값"""
+    """ 현재 코인의 노이즈 값
+        1 - abs(시가 - 종가) / 고가 - 저가
+    """
     try:
         prices: DataFrame = pybithumb.get_candlestick(ticker)
         if not prices.empty:

@@ -22,22 +22,28 @@ def money_management(ticker: str) -> None:
 
 if __name__ == '__main__':
     pandas.set_option('display.max_rows', None)
-    # 30일 노이즈 이동평균값
-    ticker = 'XRP'
-    current_noise = get_current_noise(ticker)
-    MA3_NOISE = calc_noise_ma_by(ticker, 3)
-    MA5_NOISE = calc_noise_ma_by(ticker, 5)
-    MA10_NOISE = calc_noise_ma_by(ticker, 10)
-    MA20_NOISE = calc_noise_ma_by(ticker, 20)
-    print(
-        f'curr_noise: {current_noise}\n'
-        f'MA3_NOISE: {MA3_NOISE}\n'
-          f'MA5_NOISE: {MA5_NOISE}\n'
-          f'MA10_NOISE: {MA10_NOISE}\n'
-          f'MA20_NOISE: {MA20_NOISE}')
+
+    coin_buy_wish_list, _, __ = get_buy_wish_list()
+    for ticker in coin_buy_wish_list:
+        name = get_coin_name(ticker)
+        current_noise = get_current_noise(ticker)
+        MA3_NOISE = calc_noise_ma_by(ticker, 3)
+        MA5_NOISE = calc_noise_ma_by(ticker, 5)
+        MA10_NOISE = calc_noise_ma_by(ticker, 10)
+        MA20_NOISE = calc_noise_ma_by(ticker, 20)
+        R = calc_R(ticker, 0.5)
+        print(
+            f'{name} \n'
+            f'R: {R} \n'
+            f'curr_noise: {current_noise}\n'
+            f'MA3_NOISE: {MA3_NOISE}\n'
+            f'MA5_NOISE: {MA5_NOISE}\n'
+            f'MA10_NOISE: {MA10_NOISE}\n'
+            f'MA20_NOISE: {MA20_NOISE}')
+        print('-' * 100)
+        time.sleep(0.5)
 
     # print(f'current_noise: {get_prev_noise("BTC")}')
-
 
     # while True:
     #     print(f'current_noise: {get_current_noise("BTC")}')
@@ -51,16 +57,3 @@ if __name__ == '__main__':
     #     if noise < 0.3:
     #         print(f'추세적인 코인 {ticker}')
     #     # print(f'{ticker} 추세 평균 {calc_average_ma_by(ticker)}')
-
-
-    # for ticker in [ticker, 'ETH', 'XRP', 'XLM', 'LTC', 'EOS', 'ADA', 'BCH']:
-    #     is_bull = is_bull_market(ticker)
-    #     if is_bull:
-    #         print(f'상승장: {ticker} {is_bull}')
-    #     else:
-    #         print(f'상승장 아님: {ticker}')
-
-    print(get_coin_bought_list())
-
-
-
