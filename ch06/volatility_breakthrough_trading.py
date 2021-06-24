@@ -122,24 +122,18 @@ def buy_coin(ticker: str, buy_ratio: float, R: float = 0.5) -> bool or None:
                         log(msg)
                         # telegram_bot.send_coin_bot(msg)
                         return False
-                    # ------------------------------------------------------------
                     current_noise = get_current_noise(ticker)
                     if current_noise > 0.55:
                         msg2 = f'당일 시장상태 노이즈 심함! curr_noise: {current_noise} \n'
                         msg2 += f'{ticker} 매수 방지!'
                         log(msg2)
                         return False
-                    # 지정가 매수 주문 api (불안정)
-                    order_desc: tuple = buy_limit_price(ticker, ask_price, buy_qty)
-                    time.sleep(0.1)
                     # ------------------------------------------------------------
-                    if type(order_desc) is dict and order_desc['status'] != '0000':
-                        # 시장가 매수 주문!
-                        log(f'지정가 매수 주문 실패: {order_desc}, 시장가 매수 시도!')
-                        order_desc: tuple = buy_market_price(ticker, buy_qty)
-                    time.sleep(0.2)
-                    # 체결 정보
+                    # 시장가 매수 주문 api
+                    order_desc: tuple = buy_market_price(ticker, buy_qty)
+                    time.sleep(0.1)
                     # order_desc: ('bid', 'KLAY', 'C0538000000004404555', 'KRW')
+                    # ------------------------------------------------------------
                     if order_desc is tuple and len(order_desc) > 0:
                         completed_order: tuple = get_my_order_completed_info(order_desc)
                         # 거래타입, 코인티커, 가격, 수량 ,수수료(krw), 거래금액)
