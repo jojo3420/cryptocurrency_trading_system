@@ -835,7 +835,7 @@ if __name__ == '__main__':
                 time.sleep(10)
 
             print('-' * 150)
-            time.sleep(1)
+            time.sleep(2)
     except Exception as e:
         msg = f'메인 로직 예외 발생. 시스템 종료되었음. {str(e)}'
         log(msg)
