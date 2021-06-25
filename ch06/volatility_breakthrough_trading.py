@@ -129,32 +129,43 @@ def buy_coin(ticker: str, buy_ratio: float, R: float = 0.5) -> bool or None:
                         log(msg2)
                         return False
                     # ------------------------------------------------------------
-                    # 시장가 매수 주문 api
-                    order_desc: tuple = buy_market_price(ticker, buy_qty)
-                    log(order_desc)
+                    # 지정가 매수 주문 api (불안정)
+                    order_desc: tuple = buy_limit_price(ticker, int(ask_price), buy_qty)
                     time.sleep(0.1)
-                    # order_desc: ('bid', 'KLAY', 'C0538000000004404555', 'KRW')
                     # ------------------------------------------------------------
-                    # if order_desc is tuple and len(order_desc) > 0:
-                    completed_order: tuple = get_my_order_completed_info(order_desc)
-                    # 거래타입, 코인티커, 가격, 수량 ,수수료(krw), 거래금액)
-                    order_type, _ticker, price, order_qty, fee, transaction_krw_amount = completed_order
-                    # insert bought list
-                    save_bought_list((ticker, order_desc[2]))
-                    order_desc = list(order_desc)
-                    diff = price - target_price
-                    diff_percent = round(diff / price * 100, 3)
-                    order_desc.extend(
-                        [price, order_qty, target_price, R, fee, transaction_krw_amount, diff, diff_percent,
-                         MA3_NOISE, noise_desc])
-                    save_transaction_history(order_desc)
-                    log(f'매수주문성공: {ticker} {order_desc[2]}')
-                    msg = f'[매수알림] {ticker} \n' \
-                          f'가격: {price} 수량: {round(buy_qty, 4)}개 \n' \
-                          f'슬리피지: {diff} \n' \
-                          f'슬리피지 비율: {round(diff_percent, 3)}%'
-                    telegram_bot.send_coin_bot(msg)
-                    return True
+                    if type(order_desc) is dict and order_desc['status'] != '0000':
+                        # 시장가 매수 주문!
+                        log(f'지정가 매수 주문 실패: {order_desc}, \n 시장가 매수 시도!')
+                        # ------------------------------------------------------------
+                        order_desc: tuple = buy_market_price(ticker, buy_qty)
+                        # ------------------------------------------------------------
+                        time.sleep(0.1)
+                    # 체결 정보
+                    print(order_desc)
+                    # order_desc: ('bid', 'KLAY', 'C0538000000004404555', 'KRW')
+                    if type(order_desc) is tuple and len(order_desc) > 0:
+                        completed_order: tuple = get_my_order_completed_info(order_desc)
+                        # 거래타입, 코인티커, 가격, 수량 ,수수료(krw), 거래금액)
+                        order_type, _ticker, price, order_qty, fee, transaction_krw_amount = completed_order
+                        # insert bought list
+                        save_bought_list((ticker, order_desc[2]))
+                        order_desc = list(order_desc)
+                        diff = price - target_price
+                        diff_percent = round(diff / price * 100, 3)
+                        order_desc.extend(
+                            [price, order_qty, target_price, R, fee, transaction_krw_amount, diff, diff_percent,
+                             MA3_NOISE, noise_desc])
+                        save_transaction_history(order_desc)
+                        log(f'매수주문성공: {ticker} {order_desc[2]}')
+                        msg = f'[매수알림] {ticker} \n' \
+                              f'가격: {price} 수량: {round(buy_qty, 4)}개 \n' \
+                              f'슬리피지: {diff} \n' \
+                              f'슬리피지 비율: {round(diff_percent, 3)}%'
+                        telegram_bot.send_coin_bot(msg)
+                        return True
+                    else:
+                        log(f'{ticker} 매수 실패 주문 결과 확인: {order_desc}')
+                        return False
                 else:
                     log(f'변동성 돌파 하지 못함: {ticker}')
             else:
