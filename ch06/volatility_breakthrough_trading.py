@@ -547,9 +547,10 @@ def calc_R(symbol: str, sub_R: float) -> float:
     :return: R
     """
     try:
-        MA3_R = calc_noise_ma_by(symbol, 3)
-        curr_noise = get_current_noise(symbol)
-        R = round((MA3_R + curr_noise) / 2, 3)
+        # MA3_R = calc_noise_ma_by(symbol, 3)
+        # curr_noise = get_current_noise(symbol)
+        # R = round((MA3_R + curr_noise) / 2, 3)
+        R = calc_noise_ma_by(symbol, 20)
         return R
     except Exception as E:
         log_msg = f'trailing_stop() 예외발생 {symbol} -> {str(E)}'
@@ -732,7 +733,7 @@ def dynamic_change_R() -> None:
 
 def trading_rest_time():
     """
-    트레이딩 새로 시작전 휴식시간 23:55 부터 6분간 초기화
+    트레이딩 시작전 휴식시간 23:55 부터 6분간 초기화
     1) R값 0.5로 초기화
     2)  is_loss_sell 값 0으로 초기화
     :return:
@@ -744,10 +745,11 @@ def trading_rest_time():
               ' WHERE is_active = %s'
         mutation_db(sql, (0, 1))
 
-        coin_buy_wish_list, _coin_ratio_list, _coin_r_list = get_buy_wish_list()
-        for idx, symbol in enumerate(coin_buy_wish_list):
-            R = calc_R(symbol, _coin_r_list(idx))
-            modify_R(symbol, R)
+        # R 변경
+        # coin_buy_wish_list, _coin_ratio_list, _coin_r_list = get_buy_wish_list()
+        # for idx, symbol in enumerate(coin_buy_wish_list):
+        #     R = calc_R(symbol, _coin_r_list(idx))
+        #     modify_R(symbol, R)
 
     except Exception as ex:
         log(f'trading_rest_time() 예외발생 {str(ex)}')
@@ -811,7 +813,7 @@ if __name__ == '__main__':
             # 총수익률이  -6 이하일 경우 종목의 손절 비율 타이트 만듬
             if yields < -8.0:
                 loss_ratio = loss_ratio * 0.7
-                msg = f'계좌 총 수익률 -6% 도달 \n' \
+                msg = f'계좌 총 수익률 -8% 도달 \n' \
                       f'손절라인 변경: {loss_ratio}'
                 telegram_bot.send_coin_bot(msg)
                 log(msg)

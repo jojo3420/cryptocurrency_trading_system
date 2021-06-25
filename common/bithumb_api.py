@@ -398,10 +398,8 @@ def calc_noise_ma_by(ticker: str, days: int = 30) -> float:
             MA_noise = noise.rolling(window=days).mean()
             # print(MA_noise.tail(days))
             return MA_noise[-1]
-        else:
-            raise ValueError('가격 데이터(DataFrame) 비어있습니다.')
     except Exception as E:
-        msg = f'calc_noise_ma_by() 예외 발생. 시스템 종료되었음. {str(E)}'
+        msg = f'calc_noise_ma_by() 예외 발생. {str(E)}'
         log(msg)
         traceback.print_exc()
         return 0.5
