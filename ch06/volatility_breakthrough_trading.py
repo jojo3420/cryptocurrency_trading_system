@@ -250,7 +250,7 @@ def sell(ticker: str, quantity: float, is_market=False) -> bool:
         return False
 
 
-def check_loss_sell(ticker: str) -> bool:
+def check_loss_sell(ticker: str, loss=3.0) -> bool:
     """
     해당 코인 손절 대상 검사후 손절매 시장가 매도하기
     (+추가) 기본 손절 비율에  (1 - 당일 변동성) 더해줌
@@ -259,7 +259,6 @@ def check_loss_sell(ticker: str) -> bool:
     :return:
     """
     try:
-        loss = 3.0
         noise = get_current_noise(ticker)
         noise_loss = loss + (1 - noise)
         noise_loss *= -1
@@ -769,6 +768,7 @@ def setup() -> None:
 if __name__ == '__main__':
     try:
         setup()
+        loss_ratio = 3.0
         while True:
             coin_buy_wish_list, coin_ratio_list, coin_r_list = get_buy_wish_list()
             coin_bought_list: list = get_coin_bought_list()
@@ -798,7 +798,7 @@ if __name__ == '__main__':
                 time.sleep(1)
 
             # 총수익률이  -6 이하일 경우 종목의 손절 비율 타이트 만듬
-            if yields < - 6.0:
+            if yields < -8.0:
                 loss_ratio = loss_ratio * 0.7
                 msg = f'계좌 총 수익률 -6% 도달 \n' \
                       f'손절라인 변경: {loss_ratio}'
@@ -815,7 +815,7 @@ if __name__ == '__main__':
                         buy_coin(ticker, coin_ratio_list[i], R)
                         time.sleep(0.2)
                     # else:
-                        # trailing_stop(ticker)
+                    # trailing_stop(ticker)
             else:
                 trading_rest_time()
                 time.sleep(1 * 10)
@@ -826,7 +826,7 @@ if __name__ == '__main__':
 
             # 손절매 확인
             for ticker in coin_bought_list:
-                check_loss_sell(ticker)
+                check_loss_sell(ticker, loss_ratio)
                 time.sleep(0.2)
 
             # 텔레그램 수익률 보고!
