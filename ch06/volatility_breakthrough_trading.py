@@ -198,19 +198,21 @@ def sell_all():
                 total_qty, used_qty = get_coin_quantity(ticker)
                 coin_quantity = total_qty - used_qty
                 if coin_quantity > 0:
+                    buy_price = get_bought_price(ticker)
                     log(f'sell() => {ticker} {coin_quantity}개')
                     order_desc: tuple = sell_market_price(ticker, coin_quantity)
                     log(f'매도 주문 성공,  order_no: {order_desc[2]}')
                     time.sleep(0.1)
                     update_bought_list(ticker)
                     order_completed_info: tuple = get_my_order_completed_info(order_desc)
-                    order_type, _ticker, price, order_qty, fee, transaction_krw_amount = order_completed_info
+                    order_type, _ticker, sell_price, order_qty, fee, transaction_krw_amount = order_completed_info
                     order_desc: list = list(order_desc)
-                    yield_ratio = get_yield(ticker)
-                    order_desc.extend([price, coin_quantity, fee, transaction_krw_amount, yield_ratio])
+                    # yield_ratio = get_yield(ticker)
+                    yield_ratio = round((buy_price / sell_price - 1) * 100, 5)
+                    order_desc.extend([sell_price, coin_quantity, fee, transaction_krw_amount, yield_ratio])
                     save_transaction_history(order_desc)
                     msg = f'[청산 매도알림] {ticker} \n' \
-                          f'가격: {price} 수량: {round(order_qty, 4)}개 \n' \
+                          f'체결가격: {sell_price} 수량: {round(order_qty, 4)}개 \n' \
                           f'수익률: {yield_ratio}%'
                     telegram_bot.send_coin_bot(msg)
                     time.sleep(1)
@@ -795,8 +797,8 @@ if __name__ == '__main__':
             yields: float = get_total_yield()
             log(f'총원화: {total_krw:,} 사용한 금액: {use_krw:,} \n추정 총수익률: {round(yields, 3)}%')
             krw_balance = total_krw - use_krw
-            today = datetime.now()
 
+            today = datetime.now()
             # 전일 코인자산 청산 시간
             start_sell_tm = today.replace(hour=23, minute=55, second=1, microsecond=0)
             end_sell_tm = today.replace(hour=23, minute=59, second=59, microsecond=0)

@@ -210,7 +210,7 @@ def get_my_order_completed_info(order_desc: tuple) -> tuple:
         (type: 'bid' or 'ask', ticker, order_id, 통화 )
         ex: ('bid', 'ETH', 'C1231242131', 'KRW')
     :return: tuple
-        체결 1건일 경우: (거래타입, 코인티커, 가격, 수량 ,수수료(krw), 거래금액)
+        체결 1건일 경우: (거래타입, 코인티커, 체결가격, 수량 ,수수료(krw), 거래금액)
         여러건 채결일 경우: (거래타입, 코인티커, 체결평균가격, 총수량, 총수수료, 거래금액)
     """
     try:
@@ -457,7 +457,7 @@ def get_current_noise(ticker: str) -> float:
 if __name__ == '__main__':
     # bithumb = _create_bithumb_api()
     print(f'{get_krw_balance():}')
-    print('btc 매수 가능 수량:', calc_buy_quantity('BTC'))
+    # print('btc 매수 가능 수량:', calc_buy_quantity('BTC'))
 
     # order_desc = buy_limit_price('XRP', 1020.0, 3)
     # print(order_desc)
@@ -468,5 +468,9 @@ if __name__ == '__main__':
     # print(order3)
 
     # crawling_cryptocurrency_info('CHZ')
-    print(f'get_my_coin_balance() {get_my_coin_balance()}')
+    # print(f'get_my_coin_balance() {get_my_coin_balance()}')
     # bithumb.
+
+    order_desc = ('ask', 'BTC', 'C0101000000415579850', 'KRW')
+    info = get_my_order_completed_info(order_desc)
+    print(info)
