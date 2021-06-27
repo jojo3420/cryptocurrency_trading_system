@@ -4,8 +4,10 @@ import traceback
 if os.name == 'nt':
     sys.path.append('C:\\source_code\\python\\cryptocurrency_trading_system')
     sys.path.append('C:\\source_code\\cryptocurrency_trading_system')
+else:
+    sys.path.append('/Users/maegmini/Code/sourcetree-git/python/cryptocurrency_trading_system')
+
 from datetime import datetime
-# from pandas import DataFrame, Series
 from common import telegram_bot
 from common.bithumb_api import *
 from common.utils import mutation_db, select_db, get_today_format, calc_prev_volatility, calc_moving_average_by, \
@@ -128,6 +130,10 @@ def buy_coin(ticker: str, buy_ratio: float, R: float = 0.5) -> bool or None:
                         msg2 += f'{ticker} 매수 방지!'
                         log(msg2)
                         return False
+                    # if expected_diff < 0:
+                    #     msg3 = f'가짜 신호 상승후 반전으로 판단 diff: {expected_diff}'
+                    #     log(msg3)
+                    #     return False
                     # ------------------------------------------------------------
                     # 지정가 매수 주문 api (불안정)
                     order_desc: tuple = buy_limit_price(ticker, int(ask_price), buy_qty)
