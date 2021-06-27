@@ -424,7 +424,7 @@ def get_coin_bought_list() -> list:
     현재 코인 보유 리스트 with bithumb
     """
     try:
-        coin_balance = get_my_coin_balance()
+        coin_balance: dict = get_my_coin_balance()
         return list(coin_balance.keys())
     except Exception as ex:
         log(f'get_coin_bought_list() 예외발생 {str(ex)}')
@@ -815,8 +815,11 @@ if __name__ == '__main__':
 
             if start_sell_tm < now_tm < end_sell_tm:
                 log('포트폴리오 모두 청산!')
-                sell_all()
+                r = sell_all()
                 time.sleep(1)
+                if r is True and len(get_coin_bought_list()) == 0:
+                    end_sell_tm = datetime.now()
+                    start_trading_tm = datetime.now()
 
             # 총수익률이  -6 이하일 경우 종목의 손절 비율 타이트 만듬
             if yields < -8.0:
@@ -834,28 +837,28 @@ if __name__ == '__main__':
                     if ticker not in coin_bought_list:
                         R = calc_R(ticker, coin_r_list[i])
                         buy_coin(ticker, coin_ratio_list[i], R)
-                        time.sleep(0.2)
+                        time.sleep(1)
                     # else:
                     # trailing_stop(ticker)
             else:
                 trading_rest_time()
-                time.sleep(1 * 10)
-                if len(coin_bought_list) == 0:
-                    print('매도할 코인 없으므로 매도죵료. 매수 다시 시작.')
-                    end_sell_tm = datetime.now()
-                    start_trading_tm = datetime.now()
+                time.sleep(1 * 5)
+                # if len(get_coin_bought_list()) == 0:
+                #     print('매도할 코인 없으므로 매도죵료. 매수 다시 시작.')
+                #     end_sell_tm = datetime.now()
+                #     start_trading_tm = datetime.now()
 
             # 손절매 확인
             for ticker in coin_bought_list:
                 check_loss_sell(ticker, loss_ratio)
-                time.sleep(0.2)
+                time.sleep(1)
 
             # 텔레그램 수익률 보고!
             if now_tm.minute == 0 and 0 <= now_tm.second <= 7:
                 send_report()
                 # calc_ratio_by_ma()
                 calc_ratio_by_volatility()
-                time.sleep(2)
+                time.sleep(3)
 
             # 매수 종목 없으면 강제 휴식
             if len(coin_buy_wish_list) == 0:
@@ -863,7 +866,7 @@ if __name__ == '__main__':
                 time.sleep(10)
 
             print('-' * 150)
-            time.sleep(2)
+            time.sleep(3)
     except Exception as e:
         msg = f'메인 로직 예외 발생. 시스템 종료되었음. {str(e)}'
         log(msg)

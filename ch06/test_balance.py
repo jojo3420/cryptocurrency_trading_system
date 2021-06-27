@@ -1,7 +1,5 @@
 from volatility_breakthrough_trading import *
-import pybithumb
-
-
+# import pybithumb
 
 
 if __name__ == '__main__':

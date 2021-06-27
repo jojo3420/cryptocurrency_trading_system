@@ -5,6 +5,9 @@ import sys
 if os.name == 'nt':
     sys.path.append('C:\\source_code\\python\\cryptocurrency_trading_system')
     sys.path.append('C:\\source_code\\cryptocurrency_trading_system')
+else:
+    sys.path.append('/Users/maegmini/Code/sourcetree-git/python/cryptocurrency_trading_system')
+
 
 from common.utils import log, select_db, mutation_many
 import traceback
@@ -474,3 +477,4 @@ if __name__ == '__main__':
     order_desc = ('ask', 'BTC', 'C0101000000415579850', 'KRW')
     info = get_my_order_completed_info(order_desc)
     print(info)
+    print(get_my_coin_balance())
