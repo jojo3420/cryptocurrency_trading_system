@@ -11,7 +11,8 @@ from volatility_breakthrough_trading import *
         체결된 주문 내역 조회 실패 => 'NoneType' object is not subscriptable
         sell() 예외발생! e =>cannot unpack non-iterable NoneType object
 """
-ticker = 'KLAY'
-total_qty, used_qty = get_coin_quantity(ticker)
-sell(ticker, total_qty-used_qty)
+# ticker = 'KLAY'
+# total_qty, used_qty = get_coin_quantity(ticker)
+# sell(ticker, total_qty-used_qty)
 
+sell_all()

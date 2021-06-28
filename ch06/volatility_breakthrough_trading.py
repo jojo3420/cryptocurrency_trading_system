@@ -198,7 +198,7 @@ def sell_all():
                 total_qty, used_qty = get_coin_quantity(ticker)
                 coin_quantity = total_qty - used_qty
                 if coin_quantity > 0:
-                    buy_price = get_bought_price(ticker)
+                    buy_price, _qty = get_bought_price_and_qty(ticker)
                     log(f'sell() => {ticker} {coin_quantity}개')
                     order_desc: tuple = sell_market_price(ticker, coin_quantity)
                     log(f'매도 주문 성공,  order_no: {order_desc[2]}')
@@ -610,7 +610,7 @@ def modify_R(ticker: str, R: float) -> None:
         traceback.print_exc()
 
 
-def get_bought_price(ticker: str) -> tuple:
+def get_bought_price_and_qty(ticker: str) -> tuple:
     """
     현재 보유중인 코인 매수가 리턴
     :param ticker:
@@ -665,7 +665,7 @@ def trailing_stop(ticker: str) -> None:
     3) 초기화: 매도 요청후 해당 종목 peak 테이블 row 을 삭제한다.
     """
     try:
-        bought_price, quantity = get_bought_price(ticker)
+        bought_price, quantity = get_bought_price_and_qty(ticker)
         current_price = pybithumb.get_current_price(ticker)
         # 내가 매수한 가격보다 현재 가격이 높을 경우 피크가격임!
         if current_price > bought_price:
@@ -680,18 +680,17 @@ def trailing_stop(ticker: str) -> None:
             if len(peak_tup) == 0:
                 mutation_db(m_sql, row)
             elif len(peak_tup) > 0:
-                m_sql = m_sql.replace('INSERT', 'REPLACE')
+                sql = "UPDATE peak SET peak_price = %s, yield_ratio = %s" \
+                      "  WHERE ticker = %s "
                 prev_peak_price, prev_yield = peak_tup[0]
                 if current_price > prev_peak_price:  # 최고가 갱신
-                    mutation_db(m_sql, row)
+                    mutation_db(m_sql, (current_price, current_yield, ticker))
                 elif prev_yield > current_yield:
                     basic_yield = 2.0
-                    noise = get_prev_noise(ticker)
-                    profit_yield = round(basic_yield + (1 - noise), 4)
-                    if prev_yield > profit_yield and current_yield <= 0.3:
-                        log(f'가짜 돌파 이므로 손실 보전 매도! 손실매도기준 수익률(2%이상): {profit_yield}')
+                    if prev_yield > basic_yield and current_yield <= 0.5:
+                        log(f'가짜 돌파 이므로 손실 보전 매도! 손실매도기준 수익률(2%)')
                         # 매도시 매도 로직을 해줘야 함
-                        sell_ok: bool = profit_sell(ticker)
+                        sell_ok: bool = sell(ticker, quantity, True)
                         log(f'트레이링 스탑 매도 결과: {name} {quantity}')
                         if sell_ok:
                             sql = 'DELETE FROM peak WHERE ticker = %s'
@@ -813,7 +812,8 @@ if __name__ == '__main__':
 
             now_tm = datetime.now()
 
-            if start_sell_tm < now_tm < end_sell_tm:
+            # if start_sell_tm < now_tm < end_sell_tm:
+            if True:
                 log('포트폴리오 모두 청산!')
                 r = sell_all()
                 time.sleep(1)
@@ -838,8 +838,8 @@ if __name__ == '__main__':
                         R = calc_R(ticker, coin_r_list[i])
                         buy_coin(ticker, coin_ratio_list[i], R)
                         time.sleep(1)
-                    # else:
-                    # trailing_stop(ticker)
+                    else:
+                        trailing_stop(ticker)
             else:
                 trading_rest_time()
                 time.sleep(1 * 5)

@@ -18,6 +18,6 @@ if __name__ == '__main__':
     #     print('-'*100)
 
 
-    print('LTC 매수가: ', get_bought_price('LTC'))
-    print('BCH 매수가: ', get_bought_price('BCH'))
-    print('BTC 매수가: ', get_bought_price('BTC'))
+    print('LTC 매수가: ', get_bought_price_and_qty('LTC'))
+    print('BCH 매수가: ', get_bought_price_and_qty('BCH'))
+    print('BTC 매수가: ', get_bought_price_and_qty('BTC'))
