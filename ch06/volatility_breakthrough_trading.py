@@ -813,7 +813,6 @@ if __name__ == '__main__':
             now_tm = datetime.now()
 
             if start_sell_tm < now_tm < end_sell_tm:
-            # if True:
                 log('포트폴리오 모두 청산!')
                 r = sell_all()
                 time.sleep(1)
