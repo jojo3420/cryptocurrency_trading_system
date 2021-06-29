@@ -555,10 +555,10 @@ def calc_R(symbol: str, sub_R: float) -> float:
     :return: R
     """
     try:
-        # MA3_R = calc_noise_ma_by(symbol, 3)
-        # curr_noise = get_current_noise(symbol)
-        # R = round((MA3_R + curr_noise) / 2, 3)
-        R = calc_noise_ma_by(symbol, 20)
+        MA3_R = calc_noise_ma_by(symbol, 3)
+        curr_noise = get_current_noise(symbol)
+        R = round((MA3_R + curr_noise) / 2, 5)
+        # R = calc_noise_ma_by(symbol, 20)
         return R
     except Exception as E:
         log_msg = f'trailing_stop() 예외발생 {symbol} -> {str(E)}'
