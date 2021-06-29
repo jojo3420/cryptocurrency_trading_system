@@ -680,7 +680,7 @@ def trailing_stop(ticker: str) -> None:
             if len(peak_tup) == 0:
                 mutation_db(m_sql, row)
             elif len(peak_tup) > 0:
-                sql = "UPDATE peak SET peak_price = %s, yield_ratio = %s" \
+                m_sql = "UPDATE peak SET peak_price = %s, yield_ratio = %s" \
                       "  WHERE ticker = %s "
                 prev_peak_price, prev_yield = peak_tup[0]
                 if current_price > prev_peak_price:  # 최고가 갱신
