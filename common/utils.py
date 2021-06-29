@@ -47,9 +47,11 @@ def mutation_db(sql: str, rows: tuple = None) -> None:
             conn.commit()
     except Exception as e:
         log(f'DB mutation 예외발생 {str(e)}')
+        print(sql, rows)
+        traceback.print_exc()
     except TimeoutError:
-        print("mutation_db() TimeoutError, sleeping 1 minute.")
-        time.sleep(60)
+        print("mutation_db() TimeoutError, sleeping 1second.")
+        time.sleep(1)
         mutation_db(sql, rows)
     finally:
         if conn:
@@ -63,7 +65,9 @@ def mutation_many(sql: str, rows: tuple = None) -> None:
             cursor.executemany(sql, rows)
             conn.commit()
     except Exception as e:
-        log(f'DB mutation 예외발생 {str(e)}')
+        log(f'DB mutation_many 예외발생 {str(e)}')
+        print(sql, rows)
+        traceback.print_exc()
     except TimeoutError:
         print("mutation_db() TimeoutError, sleeping 1 minute.")
         time.sleep(60)
@@ -80,7 +84,9 @@ def select_db(sql: str, rows: tuple = None) -> tuple:
             cursor.execute(sql, rows)
             return cursor.fetchall()
     except Exception as e:
-        log(f'DB mutation 예외발생 {str(e)}')
+        log(f'select_db() 예외발생 {str(e)}')
+        print(sql, rows)
+        traceback.print_exc()
     except TimeoutError:
         print("select_db() TimeoutError, sleeping 1 minute.")
         time.sleep(60)
