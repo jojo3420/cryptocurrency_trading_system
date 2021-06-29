@@ -118,7 +118,7 @@ def calc_williams_R(ticker: str, R: float = 0.5) -> float:
         yesterday_high = yesterday_s['high']
         yesterday_low = yesterday_s['low']
         target_price = today_open + (yesterday_high - yesterday_low) * R
-        return target_price
+        return int(target_price)
     return None
 
 
@@ -202,12 +202,58 @@ def calc_average_volatility_by_days(ticker: str, days: int) -> float:
     return None
 
 
+def remove_peak_log(ticker: str) -> None:
+    """
+    매도후 peak 로그 삭제
+    :param ticker:
+    :return:
+    """
+    sql = 'DELETE FROM peak WHERE ticker = %s'
+    mutation_db(sql, ticker)
+
+
+def get_bought_order_no(ticker: str, date_s: str) -> str or None:
+    """
+    매수 주문한 식별자 조회
+    :param ticker:
+    :param today:
+    :return:
+    """
+    sql = 'SELECT order_no FROM coin_bought_list ' \
+          ' WHERE is_sell = %s AND ticker = %s AND date = %s'
+    temp_t = select_db(sql, (False, ticker, date_s))
+    if len(temp_t) > 0:
+        order_no = temp_t[0][0]
+        return order_no
+
+
+def get_target_price_from(order_no: str) -> int:
+    """
+     거래내역 테이블에서 윌리엄스 R 가격에 의한 타켓가격 조회
+    :param order_no:
+    :return:
+    """
+    sql = "SELECT target_price FROM coin_transaction_history " \
+          " WHERE order_no = %s"
+    temp_t = select_db(sql, order_no)
+    if len(temp_t) > 0:
+        target_price: tuple = temp_t[0][0]
+        return int(target_price)
+
+
 if __name__ == '__main__':
-    conn = create_conn('.env')
+    # conn = create_conn('.env')
     # print(conn)
     # print(get_today_format())
 
-    print('비트코인 오늘 변동성: ', calc_now_volatility('BTC'))
-    print('비트코인 전일 변동성: ', calc_prev_volatility('BTC'))
-    print('이더리움 오늘 변동성', calc_now_volatility('ETH'))
-    print('이더리움 전일 변동성', calc_prev_volatility('ETH'))
+    # print('비트코인 오늘 변동성: ', calc_now_volatility('BTC'))
+    # print('비트코인 전일 변동성: ', calc_prev_volatility('BTC'))
+    # print('이더리움 오늘 변동성', calc_now_volatility('ETH'))
+    # print('이더리움 전일 변동성', calc_prev_volatility('ETH'))
+    order_no = get_bought_order_no('BTC', '2021-06-29')
+    target_price = get_target_price_from(order_no)
+    print(f'{target_price:,}')
+    _loss_target_price = int(round(target_price - (target_price * 0.005), 5))
+    print(f'{_loss_target_price:,}')
+
+    print(pybithumb.get_orderbook('BTC'))

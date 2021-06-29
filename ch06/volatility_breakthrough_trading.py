@@ -11,7 +11,7 @@ from datetime import datetime
 from common import telegram_bot
 from common.bithumb_api import *
 from common.utils import mutation_db, select_db, get_today_format, calc_prev_volatility, calc_moving_average_by, \
-    calc_williams_R, calc_prev_moving_average_by
+    calc_williams_R, calc_prev_moving_average_by, remove_peak_log, get_bought_order_no, get_target_price_from
 
 
 def save_bought_list(order_desc: tuple) -> None:
@@ -76,9 +76,10 @@ def update_bought_list(ticker: str) -> None:
     :return:
     """
     try:
-        sql = 'UPDATE coin_bought_list SET is_sell = 1 ' \
+        sql = 'UPDATE coin_bought_list ' \
+              ' SET is_sell = %s ' \
               ' WHERE ticker = %s'
-        mutation_db(sql, ticker)
+        mutation_db(sql, (True, ticker))
     except Exception as e:
         log(f' update_bought_list() 예외발생.. 매수실패 {str(e)}')
         traceback.print_exc()
@@ -107,7 +108,7 @@ def buy_coin(ticker: str, buy_ratio: float, R: float = 0.5) -> bool or None:
                 # 현재 close 시가 포함된 이동평균
                 MA3 = calc_moving_average_by(ticker, 3)
                 if (current_price > target_price) and (current_price > MA3):
-                    log(f'변동성 돌파 AND 3일 이동평균 돌파 \n target_price: {target_price:,}, {current_price}개')
+                    log(f'{ticker} 변동성 돌파 AND 3일 이동평균 돌파')
                     MA3_NOISE = calc_noise_ma_by(ticker, 3)
                     # current_noise = get_current_noise(ticker)
                     noise_desc = '추세'
@@ -120,7 +121,7 @@ def buy_coin(ticker: str, buy_ratio: float, R: float = 0.5) -> bool or None:
                     expected_diff_percent = round((expected_diff / ask_price * 100), 3)
                     if expected_diff_percent > 1.0:
                         msg = f'체결오차(슬리피지)가 너무 크므로 매수 방지: {ticker} \n'
-                        msg += f'오차비율: {expected_diff_percent}'
+                        msg += f'오차비율: {expected_diff_percent}%'
                         log(msg)
                         # telegram_bot.send_coin_bot(msg)
                         return False
@@ -211,6 +212,7 @@ def sell_all():
                     yield_ratio = round((buy_price / sell_price - 1) * 100, 5)
                     order_desc.extend([sell_price, coin_quantity, fee, transaction_krw_amount, yield_ratio])
                     save_transaction_history(order_desc)
+                    remove_peak_log(ticker)
                     msg = f'[청산 매도알림] {ticker} \n' \
                           f'체결가격: {sell_price} 수량: {round(order_qty, 4)}개 \n' \
                           f'수익률: {yield_ratio}%'
@@ -233,6 +235,11 @@ def sell(ticker: str, quantity: float, is_market=False) -> bool:
         매도 주문 요청,  order_desc: {'status': '5500', 'message': 'Invalid Parameter'}
         체결된 주문 내역 조회 실패 => 'NoneType' object is not subscriptable
         sell() 예외발생! e =>cannot unpack non-iterable NoneType object
+
+    하는일
+        1) 매수후 매수한 종목리스트(bought_list) 제외
+        2) 매도 거래내역(transaction_history) 기록
+        3) 피크 테이블 삭제
     :param ticker:
     :param quantity:
     :return:
@@ -258,6 +265,7 @@ def sell(ticker: str, quantity: float, is_market=False) -> bool:
             order_desc: list = list(order_desc)
             order_desc.extend([price, quantity, fee, transaction_krw_amount, yield_ratio])
             save_transaction_history(order_desc)
+            remove_peak_log(ticker)
             msg = f'[매도알림] {ticker} \n' \
                   f'가격: {price} 수량: {order_qty}개 \n' \
                   f'수익률: {yield_ratio}%'
@@ -288,10 +296,15 @@ def check_loss_sell(ticker: str, loss=3.0) -> bool:
             # sell!
             total_qty, used_qty = get_coin_quantity(ticker)
             quantity = total_qty - used_qty
+            # ------------------------------------------
             r: bool = sell(ticker, quantity, True)
             print(f'손절매 결과: {r}')
-            sql = 'UPDATE coin_buy_wish_list SET is_loss_sell = %s WHERE ticker = %s'
-            mutation_db(sql, (1, ticker))
+            # ------------------------------------------
+            # 손절매 매도 표시(당일 재매수 방지)
+            sql = 'UPDATE coin_buy_wish_list ' \
+                  ' SET is_loss_sell = %s' \
+                  ' WHERE ticker = %s'
+            mutation_db(sql, (True, ticker))
             return r
         else:
             return False
@@ -379,10 +392,18 @@ def send_report() -> None:
 
 
 def get_buy_wish_list() -> tuple:
+    """
+    매수 희망 코인 조회
+     - 당일 손절매한 종목 재매수 금지!
+    :return:
+    """
     try:
-        sql = 'SELECT ticker, ratio, R FROM coin_buy_wish_list ' \
-              ' WHERE is_active = %s AND is_loss_sell = %s ORDER BY ratio, R'
-        _buy_wish_list: tuple = select_db(sql, (1, 0))
+        sql = 'SELECT ticker, ratio, R ' \
+              ' FROM coin_buy_wish_list ' \
+              ' WHERE is_active = %s ' \
+              ' AND is_loss_sell = %s ' \
+              ' ORDER BY ratio, R'
+        _buy_wish_list: tuple = select_db(sql, (True, False))
         _coin_buy_wish_list = []
         _coin_ratio_list = []
         _coin_r_list = []
@@ -534,7 +555,7 @@ def is_bull_market(ticker: str) -> bool:
             if curr_price > prev_close and curr_price > open_price \
                     and current_noise <= 0.3 and MA3_NOISE < 0.4 and value >= 1:
                 print('현재가가 어제종가 보다 크고, 오늘 시가보다 크면서 \n'
-                      '당일 노이즈 3.0이하 3일평균 노이즈가 0.4 미만일 경우\n'
+                      '당일 노이즈 0.3 이하 3일평균 노이즈가 0.4 미만일 경우\n'
                       '동시에 3, 5, 10, 20일 이평선 위에 가격에 있으면 상승장으로 판단')
                 return True
             else:
@@ -668,33 +689,42 @@ def trailing_stop(ticker: str) -> None:
         bought_price, quantity = get_bought_price_and_qty(ticker)
         current_price = pybithumb.get_current_price(ticker)
         # 내가 매수한 가격보다 현재 가격이 높을 경우 피크가격임!
-        if current_price > bought_price:
-            sql = 'SELECT peak_price, yield_ratio FROM peak WHERE ticker = %s'
-            peak_tup = select_db(sql, ticker)
-            m_sql = 'INSERT INTO peak ' \
-                    ' (date, ticker, name, bought_price, peak_price, yield_ratio) ' \
-                    ' VALUES (%s, %s, %s, %s, %s, %s)'
-            name = get_coin_name(ticker)
-            current_yield = round((current_price / bought_price - 1) * 100, 3)
-            row = (get_today_format(), ticker, name, bought_price, current_price, current_yield)
+        sql = 'SELECT peak_price, yield_ratio FROM peak WHERE ticker = %s'
+        peak_tup = select_db(sql, ticker)
+        m_sql = 'INSERT INTO peak ' \
+                ' (date, ticker, name, bought_price, peak_price, yield_ratio) ' \
+                ' VALUES (%s, %s, %s, %s, %s, %s)'
+        name = get_coin_name(ticker)
+        current_yield = round((current_price / bought_price - 1) * 100, 3)
+        prev_peak_price, prev_yield = (0, 0)
+        if len(peak_tup) > 0:
+            prev_peak_price, prev_yield = peak_tup[0]
+        if current_price >= bought_price:
             if len(peak_tup) == 0:
+                row = (get_today_format(), ticker, name, bought_price, current_price, current_yield)
                 mutation_db(m_sql, row)
             elif len(peak_tup) > 0:
-                m_sql = "UPDATE peak SET peak_price = %s, yield_ratio = %s" \
-                      "  WHERE ticker = %s "
-                prev_peak_price, prev_yield = peak_tup[0]
                 if current_price > prev_peak_price:  # 최고가 갱신
+                    m_sql = "UPDATE peak SET peak_price = %s, yield_ratio = %s" \
+                            "  WHERE ticker = %s "
                     mutation_db(m_sql, (current_price, current_yield, ticker))
-                elif prev_yield > current_yield:
-                    basic_yield = 2.0
-                    if prev_yield > basic_yield and current_yield <= 0.5:
-                        log(f'가짜 돌파 이므로 손실 보전 매도! 손실매도기준 수익률(2%)')
-                        # 매도시 매도 로직을 해줘야 함
-                        sell_ok: bool = sell(ticker, quantity, True)
-                        log(f'트레이링 스탑 매도 결과: {name} {quantity}')
-                        if sell_ok:
-                            sql = 'DELETE FROM peak WHERE ticker = %s'
-                            mutation_db(sql, ticker)
+        else:
+            basic_yield = 2.0
+            if prev_yield > basic_yield and current_yield <= 0.5:
+                log(f'매수후 상승 반전됨. 작은 이익 취하고 포지션 정리!')
+                # 매도시 매도 로직을 해줘야 함 => sell() 내부에서 함
+                sell_ok: bool = sell(ticker, quantity, True)
+                log(f'트레이링 스탑 매도 결과:{sell_ok} => {name} {quantity}')
+                # 손절매 처리는 하지 않음: 재매수 될수 있음
+            else:
+                log(f'{name}: 현재 가격이 변동성 돌파 목표가격 이하로 주저않음.')
+                order_no = get_bought_order_no(ticker, get_today_format())
+                target_price: int = get_target_price_from(order_no)
+                _loss_target_price = int(round(target_price - (target_price * 0.006), 5))
+                if current_price < _loss_target_price:
+                    _sell_ok: bool = sell(ticker, quantity, True)
+                    log(f'돌파후 하락 반전 발생으로 매도함: {_sell_ok} => {name} {quantity}')
+                    # 손절매 처리는 하지 않음: 재매수 될수 있음
     except Exception as e:
         log_msg = f'trailing_stop() 예외발생 {ticker} -> {str(e)}'
         log(log_msg)
@@ -796,22 +826,14 @@ if __name__ == '__main__':
             yields: float = get_total_yield()
             log(f'총원화: {total_krw:,} 사용한 금액: {use_krw:,} \n추정 총수익률: {round(yields, 3)}%')
             krw_balance = total_krw - use_krw
-
             today = datetime.now()
             # 전일 코인자산 청산 시간
             start_sell_tm = today.replace(hour=23, minute=55, second=1, microsecond=0)
             end_sell_tm = today.replace(hour=23, minute=59, second=59, microsecond=0)
-
             # 트레이딩 시간
-            # start_good_trading_tm = today.replace(hour=0, minute=5, second=0, microsecond=0)
-            # end_good_trading_tm = today.replace(hour=8, minute=0, second=0, microsecond=0)
-
-            # 트레이딩 시간2 - 오전 포함 TEST
-            start_trading_tm = today.replace(hour=0, minute=1, second=0, microsecond=0)
+            start_trading_tm = today.replace(hour=0, minute=0, second=1, microsecond=0)
             end_trading_tm = today.replace(hour=23, minute=55, second=0, microsecond=0)
-
             now_tm = datetime.now()
-
             if start_sell_tm < now_tm < end_sell_tm:
                 log('포트폴리오 모두 청산!')
                 r = sell_all()
