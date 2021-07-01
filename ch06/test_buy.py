@@ -22,8 +22,18 @@ if __name__ == '__main__':
     # # ('bid', 'XRP', 'C0106000000241177047', 'KRW')
     # # ('bid', 'XRP', 'C0106000000241177048', 'KRW')
     #
-    # # buy_coin('XRP', 0.01, 1)
-    order_dsc = None
-    if order_dsc is None:
-        order_dsc = {"name": 'park'}
-    print(order_dsc)
+    # order_no = buy_coin('XRP', 0.01, 1)
+    # print(order_no)
+
+    ticker = 'XRP'
+    buy_qty = 2
+    # 지정가 주문
+    order_desc: tuple = buy_limit_price(ticker, 500, buy_qty)
+    print(order_desc)
+    # 지정가므로 체결보장 X:  매수호가에 유지됨
+    # order_desc = ('bid', 'XRP', 'C0106000000252216142', 'KRW')
+    # order_no = 'C0106000000252216142'
+    # print(get_my_order_completed_info(order_desc))
+    # print(bithumb.get_order_completed(order_desc))
+    # {'status': '0000', 'data': {'order_date': '1625101599535835', 'type': 'bid', 'order_status': 'Pending', 'order_currency': 'XRP', 'payment_currency': 'KRW', 'watch_price': '0', 'order_price': '700', 'order_qty': '1', 'cancel_date': '', 'cancel_type': '', 'contract': []}}
+

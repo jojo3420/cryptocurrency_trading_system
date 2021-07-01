@@ -131,27 +131,22 @@ def buy_coin(ticker: str, buy_ratio: float, R: float = 0.5) -> bool or None:
                         msg2 += f'{ticker} 매수 방지!'
                         log(msg2)
                         return False
-                    # if expected_diff < 0:
-                    #     msg3 = f'가짜 신호 상승후 반전으로 판단 diff: {expected_diff}'
-                    #     log(msg3)
-                    #     return False
                     # ------------------------------------------------------------
-                    # 지정가 매수 주문 api (불안정)
-                    order_desc: tuple = buy_limit_price(ticker, int(ask_price), buy_qty)
+                    # 지정가 매수 주문: 미체결될수 있으므로 반드시 주문 확인해야 함
+                    order_desc: tuple = buy_limit_price(ticker, ask_price, buy_qty)
                     time.sleep(0.1)
                     # ------------------------------------------------------------
-                    if type(order_desc) is dict and order_desc['status'] != '0000':
-                        # 시장가 매수 주문!
-                        log(f'지정가 매수 주문 실패: {order_desc}, \n 시장가 매수 시도!')
-                        # ------------------------------------------------------------
-                        order_desc: tuple = buy_market_price(ticker, buy_qty)
-                        # ------------------------------------------------------------
-                        time.sleep(0.1)
                     # 체결 정보
-                    print(order_desc)
                     # order_desc: ('bid', 'KLAY', 'C0538000000004404555', 'KRW')
-                    if type(order_desc) is tuple and len(order_desc) > 0:
+                    if order_desc and type(order_desc) is tuple and len(order_desc) > 0:
                         completed_order: tuple = get_my_order_completed_info(order_desc)
+                        if completed_order is None:
+                            # ------------------------------------------------------------
+                            # 시장가 매수 주문!
+                            order_desc: tuple = buy_market_price(ticker, buy_qty)
+                            time.sleep(0.1)
+                            completed_order: tuple = get_my_order_completed_info(order_desc)
+                            # ------------------------------------------------------------
                         # 거래타입, 코인티커, 가격, 수량 ,수수료(krw), 거래금액)
                         order_type, _ticker, price, order_qty, fee, transaction_krw_amount = completed_order
                         # insert bought list
@@ -172,6 +167,11 @@ def buy_coin(ticker: str, buy_ratio: float, R: float = 0.5) -> bool or None:
                         return True
                     else:
                         log(f'{ticker} 매수 실패 주문 결과 확인: {order_desc}')
+                        is_cancel: bool = bithumb.cancel_order(order_desc)
+                        log(f'{ticker} 주문 취소 => {is_cancel}')
+                        while is_cancel is False:
+                            log(f'주문취소 재요청 {order_desc}')
+                            is_cancel = bithumb.cancel_order(order_desc)
                         return False
                 else:
                     log(f'변동성 돌파 하지 못함: {ticker}')
@@ -363,7 +363,7 @@ def get_yield(ticker: str) -> float:
                 log(f'{ticker} 수익률: {round(yield_rate, 2)}%')
                 return round(yield_rate, 4)
         else:
-            log(f'order_no 조회 결과 없음으로 수익률 0 리턴: {result}')
+            log(f'{ticker} order_no 조회 결과 없음으로 수익률 0 리턴: {result}')
             return 0
     except Exception as e:
         log(f' get_yield() 예외발생.. {str(e)}')
@@ -545,18 +545,29 @@ def is_bull_market(ticker: str) -> bool:
             val += 1
         value = val / 4
 
+        # prev_volume = get_prev_volume(ticker)
+        # MA30_VOLUME = calc_prev_ma_volume(ticker, 30)
+
         if not prices.empty:
             close = prices['close']
             open = prices['open']
+            volume = prices['volume']
             prev_close = close.iloc[-2]
             open_price = open.iloc[-1]
+
+            prev_volume = volume.iloc[-2]
+            curr_volume = volume.iloc[-1]
+            MA30_VOLUME = volume.rolling(window=30).mean()
+
             # print(close.tail())
             # 현재가가 어제 종가보다 크고 오늘 시가 보다 크면서, 당일 노이즈가 0.3 보다 작고
             if curr_price > prev_close and curr_price > open_price \
-                    and current_noise <= 0.3 and MA3_NOISE < 0.4 and value >= 1:
+                    and current_noise <= 0.3 and MA3_NOISE < 0.4 and value >= 1 \
+                    and prev_volume < curr_volume and MA30_VOLUME < curr_volume:
                 print('현재가가 어제종가 보다 크고, 오늘 시가보다 크면서 \n'
                       '당일 노이즈 0.3 이하 3일평균 노이즈가 0.4 미만일 경우\n'
-                      '동시에 3, 5, 10, 20일 이평선 위에 가격에 있으면 상승장으로 판단')
+                      '동시에 3, 5, 10, 20일 이평선 위에 가격에 있으면 상승장으로 판단'
+                      '추가: 거래량 30일 평균')
                 return True
             else:
                 return False
@@ -647,15 +658,18 @@ def get_bought_price_and_qty(ticker: str) -> tuple:
                 prices = []
                 qty = []
                 for order_no in order_no_tup:
-                    sql = 'SELECT price, quantity FROM coin_transaction_history WHERE order_no = %s'
+                    sql = 'SELECT price, quantity FROM coin_transaction_history ' \
+                          ' WHERE order_no = %s'
                     price_tup = select_db(sql, order_no)
                     if len(price_tup) > 0:
                         prices.append(price_tup[0][0])
                         qty.append(price_tup[0][1])
-
                 avg_bought_price = sum(prices) / len(prices)
                 avg_quantity = sum(qty) / len(qty)
                 return avg_bought_price, avg_quantity
+            else:
+                log(f'order_no 조회결과 데이터 없음. {ticker} {order_no_tup}')
+                return 0, 0
         else:
             log(f'get_bought_price() => 요청한 {ticker}는 현재 보유하고 있지않음!')
             return 0, 0
@@ -687,44 +701,45 @@ def trailing_stop(ticker: str) -> None:
     """
     try:
         bought_price, quantity = get_bought_price_and_qty(ticker)
-        current_price = pybithumb.get_current_price(ticker)
-        # 내가 매수한 가격보다 현재 가격이 높을 경우 피크가격임!
-        sql = 'SELECT peak_price, yield_ratio FROM peak WHERE ticker = %s'
-        peak_tup = select_db(sql, ticker)
-        m_sql = 'INSERT INTO peak ' \
-                ' (date, ticker, name, bought_price, peak_price, yield_ratio) ' \
-                ' VALUES (%s, %s, %s, %s, %s, %s)'
-        name = get_coin_name(ticker)
-        current_yield = round((current_price / bought_price - 1) * 100, 3)
-        prev_peak_price, prev_yield = (0, 0)
-        if len(peak_tup) > 0:
-            prev_peak_price, prev_yield = peak_tup[0]
-        if current_price >= bought_price:
-            if len(peak_tup) == 0:
-                row = (get_today_format(), ticker, name, bought_price, current_price, current_yield)
-                mutation_db(m_sql, row)
-            elif len(peak_tup) > 0:
-                if current_price > prev_peak_price:  # 최고가 갱신
-                    m_sql = "UPDATE peak SET peak_price = %s, yield_ratio = %s" \
-                            "  WHERE ticker = %s "
-                    mutation_db(m_sql, (current_price, current_yield, ticker))
-        else:
-            basic_yield = 2.0
-            if prev_yield > basic_yield and current_yield <= 0.5:
-                log(f'매수후 상승 반전됨. 작은 이익 취하고 포지션 정리!')
-                # 매도시 매도 로직을 해줘야 함 => sell() 내부에서 함
-                sell_ok: bool = sell(ticker, quantity, True)
-                log(f'트레이링 스탑 매도 결과:{sell_ok} => {name} {quantity}')
-                # 손절매 처리는 하지 않음: 재매수 될수 있음
+        if bought_price > 0 and quantity > 0:
+            current_price = pybithumb.get_current_price(ticker)
+            # 내가 매수한 가격보다 현재 가격이 높을 경우 피크가격임!
+            sql = 'SELECT peak_price, yield_ratio FROM peak WHERE ticker = %s'
+            peak_tup = select_db(sql, ticker)
+            m_sql = 'INSERT INTO peak ' \
+                    ' (date, ticker, name, bought_price, peak_price, yield_ratio) ' \
+                    ' VALUES (%s, %s, %s, %s, %s, %s)'
+            name = get_coin_name(ticker)
+            current_yield = round((current_price / bought_price - 1) * 100, 3)
+            prev_peak_price, prev_yield = (0, 0)
+            if len(peak_tup) > 0:
+                prev_peak_price, prev_yield = peak_tup[0]
+            if current_price >= bought_price:
+                if len(peak_tup) == 0:
+                    row = (get_today_format(), ticker, name, bought_price, current_price, current_yield)
+                    mutation_db(m_sql, row)
+                elif len(peak_tup) > 0:
+                    if current_price > prev_peak_price:  # 최고가 갱신
+                        m_sql = "UPDATE peak SET peak_price = %s, yield_ratio = %s" \
+                                "  WHERE ticker = %s "
+                        mutation_db(m_sql, (current_price, current_yield, ticker))
             else:
-                log(f'{name}: 현재 가격이 변동성 돌파 목표가격 이하로 주저않음.')
-                order_no = get_bought_order_no(ticker, get_today_format())
-                target_price: int = get_target_price_from(order_no)
-                _loss_target_price = int(round(target_price - (target_price * 0.006), 5))
-                if current_price < _loss_target_price:
-                    _sell_ok: bool = sell(ticker, quantity, True)
-                    log(f'돌파후 하락 반전 발생으로 매도함: {_sell_ok} => {name} {quantity}')
+                basic_yield = 2.0
+                if prev_yield > basic_yield and current_yield <= 0.5:
+                    log(f'매수후 상승 반전됨. 작은 이익 취하고 포지션 정리!')
+                    # 매도시 매도 로직을 해줘야 함 => sell() 내부에서 함
+                    sell_ok: bool = sell(ticker, quantity, True)
+                    log(f'트레이링 스탑 매도 결과:{sell_ok} => {name} {quantity}')
                     # 손절매 처리는 하지 않음: 재매수 될수 있음
+                else:
+                    log(f'[알림] {name}: 현재 가격이 돌파 목표가격 이하로 주저않음.')
+                    order_no = get_bought_order_no(ticker, get_today_format())
+                    target_price: int = get_target_price_from(order_no)
+                    _loss_target_price = int(round(target_price - (target_price * 0.006), 5))
+                    if current_price < _loss_target_price:
+                        _sell_ok: bool = sell(ticker, quantity, True)
+                        log(f'돌파후 하락 반전 발생으로 매도함: {_sell_ok} => {name} {quantity}')
+                        # 손절매 처리는 하지 않음: 재매수 될수 있음
     except Exception as e:
         log_msg = f'trailing_stop() 예외발생 {ticker} -> {str(e)}'
         log(log_msg)

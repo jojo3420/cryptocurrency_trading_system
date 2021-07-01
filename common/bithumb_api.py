@@ -1,3 +1,5 @@
+import time
+
 import pybithumb
 import os
 import sys
@@ -7,7 +9,6 @@ if os.name == 'nt':
     sys.path.append('C:\\source_code\\cryptocurrency_trading_system')
 else:
     sys.path.append('/Users/maegmini/Code/sourcetree-git/python/cryptocurrency_trading_system')
-
 
 from common.utils import log, select_db, mutation_many
 import traceback
@@ -107,8 +108,12 @@ def buy_limit_price(ticker: str, price: float, quantity: float) -> tuple or None
             possible_order_quantity = order_krw / asks[0]['price']
             if len(asks) > 0 and order_krw > 0:
                 if possible_order_quantity >= quantity:
-                    order = bithumb.buy_limit_order(ticker, price, quantity)
-                    return order
+                    order_desc = bithumb.buy_limit_order(ticker, int(price), quantity)
+                    if type(order_desc) is dict and order_desc['status'] != '0000':
+                        log(f'지정가 매수 주문 실패(api 실패): {order_desc}')
+                        return None
+                    else:
+                        return order_desc
                 else:
                     log('주문가능 수량보다 더 많은 수량을 주문했습니다.')
                     log(f'quantity: {quantity}, possible_order_quantity: {possible_order_quantity} ')
@@ -247,8 +252,13 @@ def get_my_order_completed_info(order_desc: tuple) -> tuple:
                     avg_buy_price = avg_buy_price / len(contract)
                     return (order_type, ticker, avg_buy_price, total_order_qty, total_fee, transaction_krw_amount)
             else:
-                log(f'체결된 주문내역 상태 확인필요: {order_status}')
-                return get_my_order_completed_info(order_desc)
+                log(f'현재 주문 미체결 상태(호가창에 주문대기): {order_status}')
+                is_cancel: bool = bithumb.cancel_order(order_desc)
+                if is_cancel is False:
+                    time.sleep(1)
+                    return get_my_order_completed_info(order_desc)
+                else:
+                    return None
 
     except Exception as e:
         log(f'체결된 주문 내역 조회 실패 => {str(e)}')
@@ -352,7 +362,7 @@ def get_prev_volume(ticker: str) -> float or None:
         if not prices.empty:
             # print(prices.tail())
             volume = prices['volume']
-            return volume.iloc[-1]
+            return volume.iloc[-2]
         return None
     except Exception as E:
         msg = f'get_prev_volume() 예외 발생. 시스템 종료되었음. {str(E)}'
@@ -374,6 +384,24 @@ def calc_prev_ma_volume(ticker: str, days: int = 5) -> float or None:
             volume = prices['volume']
             MA = volume.rolling(window=days).mean()
             return MA[-2]
+    except Exception as E:
+        msg = f'calc_prev_ma_volume() 예외 발생. 시스템 종료되었음. {str(E)}'
+        log(msg)
+        traceback.print_exc()
+
+
+def get_current_volume(ticker: str) -> float:
+    """
+    당일(현재) 거래량
+    :param ticker:
+    :return:
+    """
+    try:
+        prices: DataFrame = pybithumb.get_candlestick(ticker)
+        if not prices.empty:
+            # print(prices.tail(6))
+            volume = prices['volume']
+            return volume.iloc[-1]
     except Exception as E:
         msg = f'calc_prev_ma_volume() 예외 발생. 시스템 종료되었음. {str(E)}'
         log(msg)

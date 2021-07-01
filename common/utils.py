@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import traceback
 import time
 from pandas import DataFrame, Series
+import math
 
 if os.name == 'nt':
     sys.path.append('C:\\source_code\\python\\cryptocurrency_trading_system')
@@ -118,7 +119,8 @@ def calc_williams_R(ticker: str, R: float = 0.5) -> float:
         yesterday_high = yesterday_s['high']
         yesterday_low = yesterday_s['low']
         target_price = today_open + (yesterday_high - yesterday_low) * R
-        return int(target_price)
+        if not math.isnan(target_price):
+            return int(target_price)
     return None
 
 
