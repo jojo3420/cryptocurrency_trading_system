@@ -725,6 +725,8 @@ def trailing_stop(ticker: str) -> None:
                         mutation_db(m_sql, (current_price, current_yield, ticker))
             else:
                 basic_yield = 2.0
+                # total, used = get_coin_quantity(ticker)
+                # qty = total - used
                 if prev_yield > basic_yield and current_yield <= 0.5:
                     log(f'매수후 상승 반전됨. 작은 이익 취하고 포지션 정리!')
                     # 매도시 매도 로직을 해줘야 함 => sell() 내부에서 함

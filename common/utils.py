@@ -118,7 +118,7 @@ def calc_williams_R(ticker: str, R: float = 0.5) -> float:
         today_open: Series = today_s['open']
         yesterday_high = yesterday_s['high']
         yesterday_low = yesterday_s['low']
-        target_price = today_open + (yesterday_high - yesterday_low) * R
+        target_price = today_open + ((yesterday_high - yesterday_low) * R)
         if not math.isnan(target_price):
             return int(target_price)
     return None
