@@ -106,7 +106,9 @@ def buy_coin(ticker: str, buy_ratio: float, R: float = 0.5) -> bool or None:
             if buy_qty > 0:
                 target_price = calc_williams_R(ticker, R)
                 # 현재 close 시가 포함된 이동평균
-                MA3 = calc_moving_average_by(ticker, 3)
+                # MA3 = calc_moving_average_by(ticker, 3)
+                # 당일 시세 제외  이동평균!
+                MA3 = calc_prev_moving_average_by(ticker, 3)
                 if (current_price > target_price) and (current_price > MA3):
                     log(f'{ticker} 변동성 돌파 AND 3일 이동평균 돌파')
                     MA3_NOISE = calc_noise_ma_by(ticker, 3)
@@ -489,10 +491,10 @@ def calc_ratio_by_ma() -> None:
         val = 1 / len(coin_buy_wish_list)
         for i, ticker in enumerate(coin_buy_wish_list):
             # 당일 시세가격 제외된 이동평균
-            MA3 = calc_moving_average_by(ticker, 3)
-            MA5 = calc_moving_average_by(ticker, 5)
-            MA10 = calc_moving_average_by(ticker, 10)
-            MA20 = calc_moving_average_by(ticker, 20)
+            MA3 = calc_prev_moving_average_by(ticker, 3)
+            MA5 = calc_prev_moving_average_by(ticker, 5)
+            MA10 = calc_prev_moving_average_by(ticker, 10)
+            MA20 = calc_prev_moving_average_by(ticker, 20)
             current_price = bithumb.get_current_price(ticker)
             ratio = 0
             if current_price > MA3:
@@ -530,10 +532,16 @@ def is_bull_market(ticker: str) -> bool:
         MA3_NOISE = calc_noise_ma_by(ticker, 3)
         curr_price = pybithumb.get_current_price(ticker)
         prices = pybithumb.get_candlestick(ticker)
-        MA3 = calc_moving_average_by(ticker, 3)
-        MA5 = calc_moving_average_by(ticker, 5)
-        MA10 = calc_moving_average_by(ticker, 10)
-        MA20 = calc_moving_average_by(ticker, 20)
+        # 당일 시세 포함된 이동평균
+        # MA3 = calc_moving_average_by(ticker, 3)
+        # MA5 = calc_moving_average_by(ticker, 5)
+        # MA10 = calc_moving_average_by(ticker, 10)
+        # MA20 = calc_moving_average_by(ticker, 20)
+        time.sleep(0.1)
+        MA3 = calc_prev_moving_average_by(ticker, 3)
+        MA5 = calc_prev_moving_average_by(ticker, 5)
+        MA10 = calc_prev_moving_average_by(ticker, 10)
+        MA20 = calc_prev_moving_average_by(ticker, 20)
         val = 0
         if curr_price > MA3:
             val += 1
@@ -728,19 +736,21 @@ def trailing_stop(ticker: str) -> None:
                 # total, used = get_coin_quantity(ticker)
                 # qty = total - used
                 if prev_yield > basic_yield and current_yield <= 0.5:
-                    log(f'매수후 상승 반전됨. 작은 이익 취하고 포지션 정리!')
+                    log(f'[알림] 매수후 상승 반전됨. 작은 이익 취하고 포지션 정리!')
                     # 매도시 매도 로직을 해줘야 함 => sell() 내부에서 함
                     sell_ok: bool = sell(ticker, quantity, True)
                     log(f'트레이링 스탑 매도 결과:{sell_ok} => {name} {quantity}')
                     # 손절매 처리는 하지 않음: 재매수 될수 있음
                 else:
-                    log(f'[알림] {name}: 현재 가격이 돌파 목표가격 이하로 주저않음.')
+                    log(f'[알림] {name}: 현재 가격이 돌파 목표가격 이하로 주저 앉음.')
                     order_no = get_bought_order_no(ticker, get_today_format())
                     target_price: int = get_target_price_from(order_no)
-                    _loss_target_price = int(round(target_price - (target_price * 0.006), 5))
+                    # 0.006 -> 0.009 로 변경  => 0.01즉 1%로 변경
+                    # 타켓가격 하단 1%
+                    _loss_target_price = int(round(target_price - (target_price * 0.01), 5))
                     if current_price < _loss_target_price:
                         _sell_ok: bool = sell(ticker, quantity, True)
-                        log(f'돌파후 하락 반전 발생으로 매도함: {_sell_ok} => {name} {quantity}')
+                        log(f'하락 반전 매도결과: {_sell_ok} => {name} {quantity}')
                         # 손절매 처리는 하지 않음: 재매수 될수 있음
     except Exception as e:
         log_msg = f'trailing_stop() 예외발생 {ticker} -> {str(e)}'
@@ -816,8 +826,8 @@ def setup() -> None:
     :return:
     """
     try:
-        # calc_ratio_by_ma()
-        calc_ratio_by_volatility()  # 테스트 위해 소량으로 매수 시도해봄.
+        calc_ratio_by_ma()
+        # calc_ratio_by_volatility()  # 테스트 위해 소량으로 매수 시도해봄.
         _coin_buy_wish_list, _, __ = get_buy_wish_list()
         for t in _coin_buy_wish_list:
             is_bull: bool = is_bull_market(t)
@@ -827,6 +837,7 @@ def setup() -> None:
                 telegram_bot.send_coin_bot(msg)
             else:
                 print(f'상승장 아님: {t}')
+            time.sleep(0.1)
 
     except Exception as e:
         log(f'setup() 예외 e: {str(e)}')

@@ -154,6 +154,7 @@ def calc_prev_moving_average_by(ticker: str, days: int = 3) -> float or None:
         close = prices['close']
         # print(close.tail(6))
         MA = close.rolling(window=days).mean()
+        # print(MA)
         return MA[-2]
     return None
 
