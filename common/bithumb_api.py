@@ -436,6 +436,33 @@ def calc_noise_ma_by(ticker: str, days: int = 30) -> float:
         return 0.5
 
 
+def calc_fix_noise_ma_by(ticker: str, days: int = 30) -> float:
+    """
+    실시간 이동 평균 노이즈값 계산
+    (당일 가격정보 포함됨)
+    개별 노이즈 공식
+        1 - abs(시가 - 종가) / (고가 - 저가)
+    :param ticker:
+    :param days:
+    :return:
+    """
+    try:
+        prices: DataFrame = pybithumb.get_candlestick(ticker)
+        if type(prices) is not None and not prices.empty:
+            # print(prices.tail(10))
+            # 당일 노이즈 값
+            noise: Series = 1 - abs(prices['open'] - prices['close']) / (prices['high'] - prices['low'])
+            # print(noise.tail(10))
+            MA_noise = noise.rolling(window=days).mean()
+            # print(MA_noise.tail(10))
+            return MA_noise[-2]
+    except Exception as E:
+        msg = f'calc_noise_ma_by() 예외 발생. {str(E)}'
+        log(msg)
+        traceback.print_exc()
+        return 0.5
+
+
 def calc_average_ma_by(ticker) -> float:
     try:
         prices: DataFrame = pybithumb.get_candlestick(ticker)
@@ -502,7 +529,15 @@ if __name__ == '__main__':
     # print(f'get_my_coin_balance() {get_my_coin_balance()}')
     # bithumb.
 
-    order_desc = ('ask', 'BTC', 'C0101000000415579850', 'KRW')
-    info = get_my_order_completed_info(order_desc)
-    print(info)
-    print(get_my_coin_balance())
+    # order_desc = ('ask', 'BTC', 'C0101000000415579850', 'KRW')
+    # info = get_my_order_completed_info(order_desc)
+    # print(info)
+    # print(get_my_coin_balance())
+    print(calc_fix_noise_ma_by('BTC', 5))
+
+    noise = (0.257122 +
+             0.297297 +
+             0.474675 +
+             0.752445 +
+             0.520684) / 5
+    print(noise)

@@ -16,12 +16,14 @@ if __name__ == '__main__':
     pd.set_option('display.max_columns', None)
 
     coins = ['BTC', 'XRP', 'ETH', 'EOS', 'XLM', 'ADA', 'LTC', 'BCH']
-    for i, sym in enumerate(coins):
-        R = calc_R(sym, 0.5)
-        print(f'R: {R}')
-        target_price = calc_williams_R(sym, R)
-        print(f'{sym} target: {target_price:,}')
+    sym = 'BTC'
+    for i in range(0, 20):
+        # R = calc_R(sym, 0.5)
+        # print(f'R: {R}')
+        target_price = calc_williams_R(sym, 0.5)
+        print(f'{sym} target_price: {target_price:,}')
         print('-'*100)
+        time.sleep(10)
 
     # R = calc_R('BTC', 0.5)
     # print(f'R: {R}')

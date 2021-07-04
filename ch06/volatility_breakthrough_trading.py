@@ -11,7 +11,7 @@ from datetime import datetime
 from common import telegram_bot
 from common.bithumb_api import *
 from common.utils import mutation_db, select_db, get_today_format, calc_prev_volatility, calc_moving_average_by, \
-    calc_williams_R, calc_prev_moving_average_by, remove_peak_log, get_bought_order_no, get_target_price_from
+    calc_williams_R, calc_fix_moving_average_by, remove_peak_log, get_bought_order_no, get_target_price_from
 
 
 def save_bought_list(order_desc: tuple) -> None:
@@ -47,23 +47,24 @@ def save_transaction_history(order_desc: list) -> None:
     try:
         order_type = order_desc[0]
         if order_type == 'bid':  # 매수 거래
-            order_type, ticker, order_no, currency, price, quantity, target_price, R, fee, \
-            transaction_krw_amount, diff, diff_percent, noise, noise_desc = tuple(
+            _order_type, ticker, order_no, currency, price, quantity, target_price, R, fee, \
+            transaction_krw_amount, diff, diff_percent, curr_noise, noise_ma20, type_str = tuple(
                 order_desc)
             sql = 'INSERT INTO coin_transaction_history ' \
-                  ' (order_no, date, ticker, position, price, quantity, target_price, R, fee, transaction_krw_amount, diff, diff_percent,' \
-                  'noise, noise_desc)' \
-                  ' VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)'
-            mutation_db(sql, (order_no, get_today_format(), ticker, order_type, price, quantity, target_price, R, fee,
-                              transaction_krw_amount, diff, diff_percent, noise, noise_desc))
+                  ' (order_no, date, ticker, position, price, quantity, target_price, R, fee, transaction_krw_amount, ' \
+                  ' diff, diff_percent, curr_noise, noise_ma20, type)' \
+                  ' VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s,' \
+                  ' %s, %s, %s, %s, %s)'
+            mutation_db(sql, (order_no, get_today_format(), ticker, order_type, price, quantity, target_price, R, fee,  transaction_krw_amount,
+                              diff, diff_percent, curr_noise, noise_ma20, type_str))
         elif order_type == 'ask':  # 매도 거래
-            order_type, ticker, order_no, currency, price, quantity, fee, transaction_krw_amount, yield_ratio = tuple(
+            _order_type, ticker, order_no, currency, price, quantity, fee, transaction_krw_amount, yield_ratio, type_str = tuple(
                 order_desc)
             sql = 'INSERT INTO coin_transaction_history ' \
-                  ' (order_no, date, ticker, position, price, quantity, fee, transaction_krw_amount, yield_ratio)' \
-                  ' VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)'
+                  ' (order_no, date, ticker, position, price, quantity, fee, transaction_krw_amount, yield_ratio, type)' \
+                  ' VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)'
             mutation_db(sql, (order_no, get_today_format(), ticker, order_type, price, quantity,
-                              fee, transaction_krw_amount, yield_ratio))
+                              fee, transaction_krw_amount, yield_ratio, type_str))
     except Exception as e:
         log(f' save_transaction_history() 예외발생.. 매수실패 {str(e)}')
         traceback.print_exc()
@@ -108,26 +109,28 @@ def buy_coin(ticker: str, buy_ratio: float, R: float = 0.5) -> bool or None:
                 # 현재 close 시가 포함된 이동평균
                 # MA3 = calc_moving_average_by(ticker, 3)
                 # 당일 시세 제외  이동평균!
-                MA3 = calc_prev_moving_average_by(ticker, 3)
-                if (current_price > target_price) and (current_price > MA3):
+                MA3 = calc_fix_moving_average_by(ticker, 3)
+                MA5 = calc_fix_moving_average_by(ticker, 5)
+                if (current_price > target_price) and (current_price > MA3) \
+                        and (current_price > MA5):
                     log(f'{ticker} 변동성 돌파 AND 3일 이동평균 돌파')
-                    MA3_NOISE = calc_noise_ma_by(ticker, 3)
-                    # current_noise = get_current_noise(ticker)
-                    noise_desc = '추세'
-                    if MA3_NOISE > 0.55:
-                        noise_desc = '비추세'
+                    type_str = '돌파추세'
                     order_book = pybithumb.get_orderbook(ticker)
                     asks = order_book['asks']
                     ask_price = asks[0]['price']
                     expected_diff = ask_price - target_price
                     expected_diff_percent = round((expected_diff / ask_price * 100), 3)
-                    if expected_diff_percent > 1.0:
-                        msg = f'체결오차(슬리피지)가 너무 크므로 매수 방지: {ticker} \n'
+                    if expected_diff_percent > 0.6:
+                        msg = f'체결오차(슬리피지)가 너무 크므로 매수 방지: {ticker} '
                         msg += f'오차비율: {expected_diff_percent}%'
+                        sql = 'UPDATE coin_buy_wish_list ' \
+                              ' SET is_loss_sell = %s' \
+                              ' WHERE 외 = %s '
+                        mutation_db(sql, (True, ticker))
                         log(msg)
-                        # telegram_bot.send_coin_bot(msg)
                         return False
                     current_noise = get_current_noise(ticker)
+                    noise_ma20 = calc_noise_ma_by(ticker, 20)
                     if current_noise > 0.55:
                         msg2 = f'당일 시장상태 노이즈 심함! curr_noise: {current_noise} \n'
                         msg2 += f'{ticker} 매수 방지!'
@@ -158,7 +161,7 @@ def buy_coin(ticker: str, buy_ratio: float, R: float = 0.5) -> bool or None:
                         diff_percent = round(diff / price * 100, 3)
                         order_desc.extend(
                             [price, order_qty, target_price, R, fee, transaction_krw_amount, diff, diff_percent,
-                             MA3_NOISE, noise_desc])
+                             current_noise, noise_ma20, type_str])
                         save_transaction_history(order_desc)
                         log(f'매수주문성공: {ticker} {order_desc[2]}')
                         msg = f'[매수알림] {ticker} \n' \
@@ -190,13 +193,12 @@ def sell_all():
     :return:
     """
     try:
+        type_str = '시가매도'
         while True:
             _coin_bought_list = get_coin_bought_list()
-
             if len(_coin_bought_list) == 0:
                 log('매도할 코인 없음 => 종료')
                 return True
-
             for ticker in _coin_bought_list:
                 total_qty, used_qty = get_coin_quantity(ticker)
                 coin_quantity = total_qty - used_qty
@@ -212,7 +214,7 @@ def sell_all():
                     order_desc: list = list(order_desc)
                     # yield_ratio = get_yield(ticker)
                     yield_ratio = round((buy_price / sell_price - 1) * 100, 5)
-                    order_desc.extend([sell_price, coin_quantity, fee, transaction_krw_amount, yield_ratio])
+                    order_desc.extend([sell_price, coin_quantity, fee, transaction_krw_amount, yield_ratio, type_str])
                     save_transaction_history(order_desc)
                     remove_peak_log(ticker)
                     msg = f'[청산 매도알림] {ticker} \n' \
@@ -247,6 +249,9 @@ def sell(ticker: str, quantity: float, is_market=False) -> bool:
     :return:
     """
     log(f'sell() => {ticker} {quantity}개')
+    type_str = ''
+    if is_market is True:
+        type_str = '시장가청산'
     try:
         if is_market is True:
             order_desc: tuple = sell_market_price(ticker, quantity)
@@ -265,7 +270,7 @@ def sell(ticker: str, quantity: float, is_market=False) -> bool:
             order_completed_info: tuple = get_my_order_completed_info(order_desc)
             order_type, _ticker, price, order_qty, fee, transaction_krw_amount = order_completed_info
             order_desc: list = list(order_desc)
-            order_desc.extend([price, quantity, fee, transaction_krw_amount, yield_ratio])
+            order_desc.extend([price, quantity, fee, transaction_krw_amount, yield_ratio, type_str])
             save_transaction_history(order_desc)
             remove_peak_log(ticker)
             msg = f'[매도알림] {ticker} \n' \
@@ -404,8 +409,10 @@ def get_buy_wish_list() -> tuple:
               ' FROM coin_buy_wish_list ' \
               ' WHERE is_active = %s ' \
               ' AND is_loss_sell = %s ' \
+              ' AND ratio > %s ' \
+              ' AND noise < %s' \
               ' ORDER BY ratio, R'
-        _buy_wish_list: tuple = select_db(sql, (True, False))
+        _buy_wish_list: tuple = select_db(sql, (True, False, 0, 0.55))
         _coin_buy_wish_list = []
         _coin_ratio_list = []
         _coin_r_list = []
@@ -482,19 +489,22 @@ def calc_ratio_by_ma() -> None:
     현재가격이 3, 5, 10, 20일 이동평균 비교하여 포트폴리오 매수 비율 구함
     이동평균
     당일 시가 포함 이평: calc_moving_average_by(),
-    당일 close 시가 제외 이평: calc_prev_moving_average_by()
+    당일 close 시가 제외 이평: calc_fix_moving_average_by()
     :return: 매수할 코인 목록
     """
     try:
         result = dict()
-        coin_buy_wish_list, coin_ratio_list, coin_r_list = get_buy_wish_list()
+        sql = 'SELECT ticker FROM coin_buy_wish_list' \
+              ' WHERE is_active = %s'
+        temp_t = select_db(sql, True)
+        coin_buy_wish_list = [ticker_tup[0] for ticker_tup in temp_t]
         val = 1 / len(coin_buy_wish_list)
         for i, ticker in enumerate(coin_buy_wish_list):
             # 당일 시세가격 제외된 이동평균
-            MA3 = calc_prev_moving_average_by(ticker, 3)
-            MA5 = calc_prev_moving_average_by(ticker, 5)
-            MA10 = calc_prev_moving_average_by(ticker, 10)
-            MA20 = calc_prev_moving_average_by(ticker, 20)
+            MA3 = calc_fix_moving_average_by(ticker, 3)
+            MA5 = calc_fix_moving_average_by(ticker, 5)
+            MA10 = calc_fix_moving_average_by(ticker, 10)
+            MA20 = calc_fix_moving_average_by(ticker, 20)
             current_price = bithumb.get_current_price(ticker)
             ratio = 0
             if current_price > MA3:
@@ -507,7 +517,6 @@ def calc_ratio_by_ma() -> None:
                 ratio += 1
             ratio: float = ratio / 4
             value = round(val * ratio, 3)
-            coin_ratio_list[i] = value
             result[ticker] = value
             sql = 'UPDATE coin_buy_wish_list SET ratio = %s WHERE ticker = %s'
             mutation_db(sql, (value, ticker))
@@ -538,10 +547,10 @@ def is_bull_market(ticker: str) -> bool:
         # MA10 = calc_moving_average_by(ticker, 10)
         # MA20 = calc_moving_average_by(ticker, 20)
         time.sleep(0.1)
-        MA3 = calc_prev_moving_average_by(ticker, 3)
-        MA5 = calc_prev_moving_average_by(ticker, 5)
-        MA10 = calc_prev_moving_average_by(ticker, 10)
-        MA20 = calc_prev_moving_average_by(ticker, 20)
+        MA3 = calc_fix_moving_average_by(ticker, 3)
+        MA5 = calc_fix_moving_average_by(ticker, 5)
+        MA10 = calc_fix_moving_average_by(ticker, 10)
+        MA20 = calc_fix_moving_average_by(ticker, 20)
         val = 0
         if curr_price > MA3:
             val += 1
@@ -661,7 +670,7 @@ def get_bought_price_and_qty(ticker: str) -> tuple:
         if ticker in _coin_bought_list:
             sql = 'SELECT order_no FROM coin_bought_list ' \
                   ' WHERE is_sell = %s AND ticker = %s'
-            order_no_tup: tuple = select_db(sql, (0, ticker))
+            order_no_tup: tuple = select_db(sql, (False, ticker))
             if len(order_no_tup) > 0:
                 prices = []
                 qty = []
@@ -742,12 +751,12 @@ def trailing_stop(ticker: str) -> None:
                     log(f'트레이링 스탑 매도 결과:{sell_ok} => {name} {quantity}')
                     # 손절매 처리는 하지 않음: 재매수 될수 있음
                 else:
-                    log(f'[알림] {name}: 현재 가격이 돌파 목표가격 이하로 주저 앉음.')
+                    log(f'[알림] {name}({ticker}): 현재 가격이 돌파 목표가격 이하로 주저 앉음')
                     order_no = get_bought_order_no(ticker, get_today_format())
                     target_price: int = get_target_price_from(order_no)
-                    # 0.006 -> 0.009 로 변경  => 0.01즉 1%로 변경
+                    # 0.006 -> 0.009 로 변경  => 0.01즉 1%로 변경 -> 0.007
                     # 타켓가격 하단 1%
-                    _loss_target_price = int(round(target_price - (target_price * 0.01), 5))
+                    _loss_target_price = int(round(target_price - (target_price * 0.007), 5))
                     if current_price < _loss_target_price:
                         _sell_ok: bool = sell(ticker, quantity, True)
                         log(f'하락 반전 매도결과: {_sell_ok} => {name} {quantity}')
@@ -805,9 +814,10 @@ def trading_rest_time():
     try:
         log('트레이딩 새로 시작전 휴식시간(10)')
         # 손절매 여부 초기화
-        sql = 'UPDATE coin_buy_wish_list SET is_loss_sell = %s ' \
+        sql = 'UPDATE coin_buy_wish_list ' \
+              ' SET is_loss_sell = %s ' \
               ' WHERE is_active = %s'
-        mutation_db(sql, (0, 1))
+        mutation_db(sql, (False, True))
 
         # R 변경
         # coin_buy_wish_list, _coin_ratio_list, _coin_r_list = get_buy_wish_list()
@@ -820,6 +830,24 @@ def trading_rest_time():
         traceback.print_exc()
 
 
+def filter_buy_wish_list() -> None:
+    """
+    필터링: 20일 이동평균 매일 계산: buy_wish_list 테이블 noise_ma20 컬럼 추가
+    """
+    sql = 'SELECT ticker FROM coin_buy_wish_list ' \
+          ' WHERE is_active = %s '
+    temp_t = select_db(sql, True)
+    _buy_wish_list = [ticker[0] for ticker in temp_t]
+    for _ticker in _buy_wish_list:
+        # MA20_NOISE = calc_noise_ma_by(_ticker, 20)
+        #  당일 제외 노이즈
+        MA20_NOISE = calc_fix_noise_ma_by(_ticker, 20)
+        sql = 'UPDATE coin_buy_wish_list ' \
+              ' SET noise = %s ' \
+              ' WHERE ticker = %s AND is_active = %s'
+        mutation_db(sql, (MA20_NOISE, _ticker, True))
+
+
 def setup() -> None:
     """
     프로그램 시작전 초기화
@@ -828,6 +856,7 @@ def setup() -> None:
     try:
         calc_ratio_by_ma()
         # calc_ratio_by_volatility()  # 테스트 위해 소량으로 매수 시도해봄.
+        filter_buy_wish_list()
         _coin_buy_wish_list, _, __ = get_buy_wish_list()
         for t in _coin_buy_wish_list:
             is_bull: bool = is_bull_market(t)
@@ -852,7 +881,7 @@ if __name__ == '__main__':
             coin_bought_list: list = get_coin_bought_list()
             total_krw, use_krw = get_krw_balance()
             yields: float = get_total_yield()
-            log(f'총원화: {total_krw:,} 사용한 금액: {use_krw:,} \n추정 총수익률: {round(yields, 3)}%')
+            log(f'총원화: {total_krw:,} 사용한 금액: {use_krw:,} 추정 총수익률: {round(yields, 3)}%')
             krw_balance = total_krw - use_krw
             today = datetime.now()
             # 전일 코인자산 청산 시간
@@ -879,8 +908,8 @@ if __name__ == '__main__':
                 log(msg)
 
             if start_trading_tm < now_tm < end_trading_tm:
-                if now_tm.minute == 0 and 0 <= now_tm.second <= 7:
-                    dynamic_change_R()
+                # if now_tm.minute == 0 and 0 <= now_tm.second <= 7:
+                #     dynamic_change_R()
                 # 매수하기 - 변동성 돌파
                 for i, ticker in enumerate(coin_buy_wish_list):
                     if ticker not in coin_bought_list:

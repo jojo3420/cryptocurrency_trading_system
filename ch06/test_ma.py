@@ -28,16 +28,23 @@ if __name__ == '__main__':
     # print(f'{calc_moving_average_by("ETH", 3):,}')
     #
     # MA3 = calc_moving_average_by('BTC', 3)
-    MA5 = calc_moving_average_by(ticker, days)
+    # MA5 = calc_moving_average_by(ticker, days)
     # MA10 = calc_moving_average_by('BTC', 10)
     # MA20 = calc_moving_average_by('BTC', 20)
     # print(MA3, MA5, MA10, MA20)
     # print('current: ', pybithumb.get_current_price('BTC'))
 
     # 당일 시세 포함 이동평균가격
-    print(MA5)
+    # print(MA5)
     # print((2812000+2662000+2649000+2504000+2372000)/5)
 
     # 당일 시세 제외 이동평균가격
-    print(calc_prev_moving_average_by(ticker, 5))
+    # print(calc_fix_moving_average_by(ticker, 5))
     # print((2820000+2812000+2662000+2649000+2504000)/5)
+
+    sym = 'BTC'
+    for i in range(0, 20):
+        print('고정 MA5:', calc_fix_moving_average_by(sym, 5))
+        print('변동 MA5:', calc_moving_average_by(sym, 5))
+        print('-'*100)
+        time.sleep(10)

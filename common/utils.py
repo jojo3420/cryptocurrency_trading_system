@@ -142,7 +142,7 @@ def calc_moving_average_by(ticker: str, days: int = 3) -> float or None:
         traceback.print_exc()
 
 
-def calc_prev_moving_average_by(ticker: str, days: int = 3) -> float or None:
+def calc_fix_moving_average_by(ticker: str, days: int = 3) -> float or None:
     """
     기준일 이동평균 구하기 (당일 close 가격 제외한 이동평균)
     :param ticker:
@@ -236,12 +236,15 @@ def get_target_price_from(order_no: str) -> int:
     :param order_no:
     :return:
     """
-    sql = "SELECT target_price FROM coin_transaction_history " \
+    sql = "SELECT ticker, target_price FROM coin_transaction_history " \
           " WHERE order_no = %s"
     temp_t = select_db(sql, order_no)
     if len(temp_t) > 0:
-        target_price: tuple = temp_t[0][0]
-        return int(target_price)
+        ticker, target_price = temp_t[0]
+        if target_price:
+            return int(target_price)
+        else:
+            return calc_williams_R(ticker, calc_williams_R(ticker, 0.5))
 
 
 if __name__ == '__main__':
@@ -253,10 +256,12 @@ if __name__ == '__main__':
     # print('비트코인 전일 변동성: ', calc_prev_volatility('BTC'))
     # print('이더리움 오늘 변동성', calc_now_volatility('ETH'))
     # print('이더리움 전일 변동성', calc_prev_volatility('ETH'))
-    order_no = get_bought_order_no('BTC', '2021-06-29')
-    target_price = get_target_price_from(order_no)
-    print(f'{target_price:,}')
-    _loss_target_price = int(round(target_price - (target_price * 0.005), 5))
-    print(f'{_loss_target_price:,}')
+    # order_no = get_bought_order_no('BTC', '2021-06-29')
+    # target_price = get_target_price_from(order_no)
+    # print(f'{target_price:,}')
+    # _loss_target_price = int(round(target_price - (target_price * 0.005), 5))
+    # print(f'{_loss_target_price:,}')
+    #
+    # print(pybithumb.get_orderbook('BTC'))
 
-    print(pybithumb.get_orderbook('BTC'))
+    print(calc_fix_moving_average_by('BTC', 3))
