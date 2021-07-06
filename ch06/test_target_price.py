@@ -17,20 +17,28 @@ if __name__ == '__main__':
 
     coins = ['BTC', 'XRP', 'ETH', 'EOS', 'XLM', 'ADA', 'LTC', 'BCH']
     sym = 'BTC'
-    for i in range(0, 20):
-        # R = calc_R(sym, 0.5)
-        # print(f'R: {R}')
-        target_price = calc_williams_R(sym, 0.5)
-        print(f'{sym} target_price: {target_price:,}')
-        print('-'*100)
-        time.sleep(10)
+    # for i in range(0, 20):
+    #     # R = calc_R(sym, 0.5)
+    #     # print(f'R: {R}')
+    #     target_price = calc_williams_R(sym, 0.5)
+    #     print(f'{sym} target_price: {target_price:,}')
+    #     print('-'*100)
+    #     time.sleep(10)
 
     # R = calc_R('BTC', 0.5)
     # print(f'R: {R}')
     # target_price = calc_williams_R('BTC', R)
     # print(target_price)
 
+    ticker = 'BTC'
+    prices = pybithumb.get_candlestick(ticker)
+    print(prices.tail(10))
 
-    # print('LTC 매수가: ', get_bought_price_and_qty('LTC'))
-    # print('BCH 매수가: ', get_bought_price_and_qty('BCH'))
-    # print('BTC 매수가: ', get_bought_price_and_qty('BTC'))
+    open = 39434000
+    high = 41680000
+    low = 39000000
+    R = 0.5
+    target_price_1 = open + ((high - low) * R)
+    print(target_price_1)
+
+    print(calc_williams_R(ticker, R))

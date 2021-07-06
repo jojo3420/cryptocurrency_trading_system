@@ -1,5 +1,7 @@
 import os, sys, time
-import traceback
+import threading
+# import traceback
+from multiprocessing import Process, Queue
 
 if os.name == 'nt':
     sys.path.append('C:\\source_code\\python\\cryptocurrency_trading_system')
@@ -11,7 +13,9 @@ from datetime import datetime
 from common import telegram_bot
 from common.bithumb_api import *
 from common.utils import mutation_db, select_db, get_today_format, calc_prev_volatility, calc_moving_average_by, \
-    calc_williams_R, calc_fix_moving_average_by, remove_peak_log, get_bought_order_no, get_target_price_from
+    calc_williams_R, calc_fix_moving_average_by, remove_peak_log, get_bought_order_no, get_target_price_from, \
+    get_bull_coin_list, save_daily_profit_list, get_daily_profit_list, get_daily_loss_sell_list, \
+    save_daily_loss_sell_list
 
 
 def save_bought_list(order_desc: tuple) -> None:
@@ -55,7 +59,8 @@ def save_transaction_history(order_desc: list) -> None:
                   ' diff, diff_percent, curr_noise, noise_ma20, type)' \
                   ' VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s,' \
                   ' %s, %s, %s, %s, %s)'
-            mutation_db(sql, (order_no, get_today_format(), ticker, order_type, price, quantity, target_price, R, fee,  transaction_krw_amount,
+            mutation_db(sql, (order_no, get_today_format(), ticker, order_type, price, quantity, target_price, R, fee,
+                              transaction_krw_amount,
                               diff, diff_percent, curr_noise, noise_ma20, type_str))
         elif order_type == 'ask':  # 매도 거래
             _order_type, ticker, order_no, currency, price, quantity, fee, transaction_krw_amount, yield_ratio, type_str = tuple(
@@ -84,6 +89,21 @@ def update_bought_list(ticker: str) -> None:
     except Exception as e:
         log(f' update_bought_list() 예외발생.. 매수실패 {str(e)}')
         traceback.print_exc()
+
+
+def check_volatility_breakthrough_list() -> list:
+    """ 매수 희망 종목에서 당일에 변동성돌파 하는 종목 리스트 리턴 """
+    volatility_break_list = []
+    _coin_buy_wish_list, _coin_ratio_list, _coin_r_list = get_buy_wish_list()
+    for idx, _ticker in enumerate(_coin_buy_wish_list):
+        current_price = pybithumb.get_current_price(ticker)
+        _R = calc_R(_ticker, _coin_r_list[idx])
+        time.sleep(0.1)
+        target_price = calc_williams_R(_ticker, _R)
+        if current_price > target_price:
+            volatility_break_list.append(ticker)
+
+    return volatility_break_list
 
 
 def buy_coin(ticker: str, buy_ratio: float, R: float = 0.5) -> bool or None:
@@ -125,7 +145,7 @@ def buy_coin(ticker: str, buy_ratio: float, R: float = 0.5) -> bool or None:
                         msg += f'오차비율: {expected_diff_percent}%'
                         sql = 'UPDATE coin_buy_wish_list ' \
                               ' SET is_loss_sell = %s' \
-                              ' WHERE 외 = %s '
+                              ' WHERE ticker = %s '
                         mutation_db(sql, (True, ticker))
                         log(msg)
                         return False
@@ -196,9 +216,18 @@ def sell_all():
         type_str = '시가매도'
         while True:
             _coin_bought_list = get_coin_bought_list()
+
             if len(_coin_bought_list) == 0:
                 log('매도할 코인 없음 => 종료')
                 return True
+
+            # 당일 추세 있는 코인 매도 항목 제외시킴
+            today_volatility_list = check_volatility_breakthrough_list()
+            target_sell_list = set(_coin_bought_list) - set(today_volatility_list)
+            if len(target_sell_list) == 0:
+                log('당일 추세 코인을 제외하면 매도할 코인이 없음 => 매도종료')
+                return True
+
             for ticker in _coin_bought_list:
                 total_qty, used_qty = get_coin_quantity(ticker)
                 coin_quantity = total_qty - used_qty
@@ -312,6 +341,7 @@ def check_loss_sell(ticker: str, loss=3.0) -> bool:
                   ' SET is_loss_sell = %s' \
                   ' WHERE ticker = %s'
             mutation_db(sql, (True, ticker))
+            save_daily_loss_sell_list(ticker, get_coin_name(ticker), yield_rate)
             return r
         else:
             return False
@@ -604,9 +634,10 @@ def calc_R(symbol: str, sub_R: float) -> float:
     :return: R
     """
     try:
-        MA3_R = calc_noise_ma_by(symbol, 3)
-        curr_noise = get_current_noise(symbol)
-        R = round((MA3_R + curr_noise) / 2, 5)
+        # R = calc_fix_noise_ma_by(symbol, 20)
+        R = calc_noise_ma_by(symbol, 20)
+        # curr_noise = get_current_noise(symbol)
+        # R = round((MA3_R + curr_noise) / 2, 5)
         # R = calc_noise_ma_by(symbol, 20)
         return R
     except Exception as E:
@@ -741,15 +772,17 @@ def trailing_stop(ticker: str) -> None:
                                 "  WHERE ticker = %s "
                         mutation_db(m_sql, (current_price, current_yield, ticker))
             else:
-                basic_yield = 2.0
+                # 차익실현: 7%
+                basic_yield = 9.0
                 # total, used = get_coin_quantity(ticker)
                 # qty = total - used
-                if prev_yield > basic_yield and current_yield <= 0.5:
+                if prev_yield > basic_yield and current_yield <= 7.0:
                     log(f'[알림] 매수후 상승 반전됨. 작은 이익 취하고 포지션 정리!')
                     # 매도시 매도 로직을 해줘야 함 => sell() 내부에서 함
                     sell_ok: bool = sell(ticker, quantity, True)
                     log(f'트레이링 스탑 매도 결과:{sell_ok} => {name} {quantity}')
                     # 손절매 처리는 하지 않음: 재매수 될수 있음
+                    save_daily_profit_list(ticker, name, current_yield)
                 else:
                     log(f'[알림] {name}({ticker}): 현재 가격이 돌파 목표가격 이하로 주저 앉음')
                     order_no = get_bought_order_no(ticker, get_today_format())
@@ -848,6 +881,40 @@ def filter_buy_wish_list() -> None:
         mutation_db(sql, (MA20_NOISE, _ticker, True))
 
 
+class BuyWorker(threading.Thread):
+    """
+    매수 담당 쓰레드
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.daemon = True
+
+    def run(self):
+        while True:
+            coin_buy_wish_list, coin_ratio_list, coin_r_list = get_buy_wish_list()
+            coin_bought_list: list = get_coin_bought_list()
+            today = datetime.now()
+            # 트레이딩 시간
+            start_trading_tm = today.replace(hour=0, minute=0, second=1, microsecond=0)
+            end_trading_tm = today.replace(hour=23, minute=55, second=0, microsecond=0)
+            now_tm = datetime.now()
+
+            if start_trading_tm < now_tm < end_trading_tm:
+                # 매수하기 - 변동성 돌파
+                for i, ticker in enumerate(coin_buy_wish_list):
+                    if ticker not in coin_bought_list:
+                        R = calc_R(ticker, coin_r_list[i])
+                        buy_coin(ticker, coin_ratio_list[i], R)
+                        time.sleep(1)
+                    else:
+                        trailing_stop(ticker)
+            else:
+                trading_rest_time()
+                time.sleep(1 * 5)
+            time.sleep(1)
+
+
 def setup() -> None:
     """
     프로그램 시작전 초기화
@@ -872,13 +939,36 @@ def setup() -> None:
         log(f'setup() 예외 e: {str(e)}')
 
 
+def telebot_worker():
+    """
+        매시간 정각에 텔레그램 계좌 현황 전송
+    """
+    while True:
+        _now_tm = datetime.now()
+        # 텔레그램 수익률 보고!
+        if _now_tm.minute == 0 and 0 <= _now_tm.second <= 59:
+            send_report()
+        time.sleep(50)
+
+
 if __name__ == '__main__':
+    tele_process = Process(target=telebot_worker, args=())
+    tele_process.start()
     try:
         setup()
         loss_ratio = 3.0
         while True:
             coin_buy_wish_list, coin_ratio_list, coin_r_list = get_buy_wish_list()
+            bull_coin_list, bull_ratio_list, bull_r_list = get_bull_coin_list()
+            coin_buy_wish_list = coin_buy_wish_list + bull_coin_list
+            coin_ratio_list = coin_ratio_list + bull_ratio_list
+            coin_r_list = coin_r_list = bull_r_list
             coin_bought_list: list = get_coin_bought_list()
+
+            # 당일 차익 실현한 코인
+            daily_profit_list = get_daily_profit_list()
+            daily_loss_coin_list = get_daily_loss_sell_list()
+
             total_krw, use_krw = get_krw_balance()
             yields: float = get_total_yield()
             log(f'총원화: {total_krw:,} 사용한 금액: {use_krw:,} 추정 총수익률: {round(yields, 3)}%')
@@ -908,23 +998,20 @@ if __name__ == '__main__':
                 log(msg)
 
             if start_trading_tm < now_tm < end_trading_tm:
-                # if now_tm.minute == 0 and 0 <= now_tm.second <= 7:
-                #     dynamic_change_R()
                 # 매수하기 - 변동성 돌파
                 for i, ticker in enumerate(coin_buy_wish_list):
-                    if ticker not in coin_bought_list:
+                    if ticker in daily_profit_list + daily_loss_coin_list:
+                        continue
+                    elif ticker not in coin_bought_list:
                         R = calc_R(ticker, coin_r_list[i])
                         buy_coin(ticker, coin_ratio_list[i], R)
-                        time.sleep(1)
+                        time.sleep(0.5)
                     else:
                         trailing_stop(ticker)
+                        time.sleep(0.5)
             else:
                 trading_rest_time()
                 time.sleep(1 * 5)
-                # if len(get_coin_bought_list()) == 0:
-                #     print('매도할 코인 없으므로 매도죵료. 매수 다시 시작.')
-                #     end_sell_tm = datetime.now()
-                #     start_trading_tm = datetime.now()
 
             # 손절매 확인
             for ticker in coin_bought_list:

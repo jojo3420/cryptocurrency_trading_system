@@ -8,9 +8,14 @@ import time
 from pandas import DataFrame, Series
 import math
 
+
 if os.name == 'nt':
     sys.path.append('C:\\source_code\\python\\cryptocurrency_trading_system')
     sys.path.append('C:\\source_code\\cryptocurrency_trading_system')
+else:
+    sys.path.append('/Users/maegmini/Code/sourcetree-git/python/cryptocurrency_trading_system')
+
+
 
 ymd_format = '%Y-%m-%d'
 
@@ -247,6 +252,70 @@ def get_target_price_from(order_no: str) -> int:
             return calc_williams_R(ticker, calc_williams_R(ticker, 0.5))
 
 
+def get_bull_coin_list() -> list:
+    """ DB에 저장된 상승중인 코인 목록 리스트로 조회 """
+    today = get_today_format()
+    sql = 'SELECT ticker, ratio, R FROM bull_coin_list' \
+          ' WHERE date = %s'
+    temp_t = select_db(sql, today)
+    bull_coin_list = []
+    bull_ratio_list = []
+    bull_r_list = []
+    for ticker, ratio, R in temp_t:
+        bull_coin_list.append(ticker)
+        bull_ratio_list.append(ratio)
+        bull_r_list.append(R)
+
+    return bull_coin_list, bull_ratio_list, bull_r_list
+
+
+def get_daily_profit_list() -> list:
+    """
+    당일에 청산한 종목 조회
+    :return:
+    """
+    sql = 'SELECT ticker FROM daily_profit_list ' \
+          ' WHERE date = %s'
+    temp_t = select_db(sql, get_today_format())
+    profit_list = [ticker[0] for ticker in temp_t]
+    return profit_list
+
+def save_daily_profit_list(ticker, name, yield_ratio):
+    """
+    당일에 차익실현 장목 저장 목록
+    :return:
+    """
+    sql = 'REPLACE INTO daily_profit_list ' \
+          ' (date, ticker, name, yield_ratio) ' \
+          ' VALUES (%s, %s, %s, %s) '
+    today = get_today_format()
+    mutation_db(sql, (today, ticker, name, yield_ratio))
+
+
+def get_daily_loss_sell_list() -> list:
+    """
+    당일 손절매 한 종목 리스트
+    :return:
+    """
+    sql = 'SELECT ticker FROM daily_loss_sell_list ' \
+          ' WHERE date = %s'
+    temp_t = select_db(sql, get_today_format())
+    loss_coin_list = [ticker[0] for ticker in temp_t]
+    return loss_coin_list
+
+
+def save_daily_loss_sell_list(ticker, name, yield_ratio):
+    """
+    당일 손절매 한 코인 DB에 기록
+    :return:
+    """
+    sql = 'REPLACE INTO daily_loss_sell_list ' \
+          ' (date, ticker, name, yield_ratio) ' \
+          ' VALUES (%s, %s, %s, %s) '
+    today = get_today_format()
+    mutation_db(sql, (today, ticker, name, yield_ratio))
+
+
 if __name__ == '__main__':
     # conn = create_conn('.env')
     # print(conn)
@@ -265,3 +334,4 @@ if __name__ == '__main__':
     # print(pybithumb.get_orderbook('BTC'))
 
     print(calc_fix_moving_average_by('BTC', 3))
+    print(get_bull_coin_list())

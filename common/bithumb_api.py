@@ -10,7 +10,7 @@ if os.name == 'nt':
 else:
     sys.path.append('/Users/maegmini/Code/sourcetree-git/python/cryptocurrency_trading_system')
 
-from common.utils import log, select_db, mutation_many
+from common.utils import log, select_db, mutation_many, get_today_format
 import traceback
 import requests
 from bs4 import BeautifulSoup
@@ -510,6 +510,18 @@ def get_current_noise(ticker: str) -> float:
         msg = f'calc_noise_ma_by() 예외 발생. 시스템 종료되었음. {str(E)}'
         log(msg)
         traceback.print_exc()
+
+
+def save_bull_coin(tickers: list) -> None:
+    rows = []
+    today = get_today_format()
+    sql = 'REPLACE INTO bull_coin_list ' \
+          ' (date, ticker, name)' \
+          ' VALUES (%s, %s, %s)  '
+    for ticker in tickers:
+        rows.append((today, ticker, get_coin_name(ticker)))
+    mutation_many(sql, rows)
+
 
 
 if __name__ == '__main__':
