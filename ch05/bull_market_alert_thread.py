@@ -5,13 +5,7 @@ import pybithumb
 from PyQt5.QtWidgets import *
 from PyQt5 import uic
 from PyQt5.QtCore import *
-from pandas import DataFrame
-import threading
-from ch06.volatility_breakthrough_trading import calc_moving_average_by, calc_williams_R, calc_R, \
-    calc_fix_moving_average_by, calc_fix_noise_ma_by, get_current_noise, calc_prev_ma_volume, calc_fix_noise_ma_by
-
-# tickers = ["BTC", "ETH", "BCH", "ETC", 'XRP', 'BNB', 'DOGE', 'KLAY']
-from common.bithumb_api import save_bull_coin
+from ch06.volatility_breakthrough_trading import calc_moving_average_by, calc_williams_R, find_bull_market_list
 
 
 def get_bithumb_market_info(ticker: str, days: int = 5) -> tuple:
@@ -99,49 +93,9 @@ class MyWindow(QMainWindow, form_class):
             traceback.print_exc()
 
 
-def find_bull_market_list() -> list:
-    _list = []
-    for ticker in pybithumb.get_tickers():
-        try:
-            curr_price = pybithumb.get_current_price(ticker)
-            R = calc_R(ticker, 0.5)
-            target_price = calc_williams_R(ticker, R)
-            MA3 = calc_fix_moving_average_by(ticker, 3)
-            MA5 = calc_fix_moving_average_by(ticker, 5)
-            curr_noise = get_current_noise(ticker)
-            noise_ma3 = calc_fix_noise_ma_by(ticker, 3)
-            noise_ma5 = calc_fix_noise_ma_by(ticker, 5)
-            # volume = calc_prev_ma_volume()
-            if curr_price > MA3 and curr_price > MA5 \
-                    and curr_price > target_price and curr_noise <= 0.4 \
-                    and noise_ma3 < 0.6 and noise_ma5 < 0.6:
-                print(f'이동평균 3,5 상승 변동성 돌파 및 노이즈 필터링 통과 =>  상승코인: {ticker}')
-                _list.append(ticker)
-        except Exception as E:
-            print(str(E))
-            pass
-
-    return _list
-
-
-class FindBullCoinWorker(threading.Thread):
-    def __init__(self):
-        super().__init__()
-        self.daemon = True
-
-    def run(self):
-        while True:
-            _bull_tickers = find_bull_market_list()
-            print(_bull_tickers)
-            save_bull_coin(_bull_tickers)
-            time.sleep(1 * 60 * 60)
-
-
 if __name__ == '__main__':
-    FindBullCoinWorker().start()
-
     bull_tickers = find_bull_market_list()
-    print(bull_tickers)
+    # print(bull_tickers)
     # 현재 상승장인 코인 목록 저장하기
     # update_coin_buy_wish_list()
 

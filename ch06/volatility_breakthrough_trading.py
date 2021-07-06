@@ -915,6 +915,48 @@ class BuyWorker(threading.Thread):
             time.sleep(1)
 
 
+def find_bull_market_list() -> list:
+    """
+    상승코인 찾기
+     - 이동평균 3,5 상승 변동성 돌파 및 노이즈 필터링 통과
+    :return:
+    """
+    _list = []
+    for ticker in pybithumb.get_tickers():
+        try:
+            curr_price = pybithumb.get_current_price(ticker)
+            R = calc_R(ticker, 0.5)
+            target_price = calc_williams_R(ticker, R)
+            MA3 = calc_fix_moving_average_by(ticker, 3)
+            MA5 = calc_fix_moving_average_by(ticker, 5)
+            curr_noise = get_current_noise(ticker)
+            noise_ma3 = calc_fix_noise_ma_by(ticker, 3)
+            noise_ma5 = calc_fix_noise_ma_by(ticker, 5)
+            # volume = calc_prev_ma_volume()
+            if curr_price > MA3 and curr_price > MA5 \
+                    and curr_price > target_price and curr_noise <= 0.4 \
+                    and noise_ma3 < 0.6 and noise_ma5 < 0.6:
+                print(f'상승코인: {ticker}')
+                _list.append(ticker)
+        except Exception as E:
+            print(str(E))
+            pass
+    return _list
+
+
+class FindBullCoinWorker(threading.Thread):
+    def __init__(self):
+        super().__init__()
+        self.daemon = True
+
+    def run(self):
+        while True:
+            _bull_tickers = find_bull_market_list()
+            print(_bull_tickers)
+            save_bull_coin(_bull_tickers)
+            time.sleep(1 * 60 * 60)
+
+
 def setup() -> None:
     """
     프로그램 시작전 초기화
@@ -954,6 +996,7 @@ def telebot_worker():
 if __name__ == '__main__':
     tele_process = Process(target=telebot_worker, args=())
     tele_process.start()
+    FindBullCoinWorker().start()
     try:
         setup()
         loss_ratio = 3.0
@@ -962,7 +1005,7 @@ if __name__ == '__main__':
             bull_coin_list, bull_ratio_list, bull_r_list = get_bull_coin_list()
             coin_buy_wish_list = coin_buy_wish_list + bull_coin_list
             coin_ratio_list = coin_ratio_list + bull_ratio_list
-            coin_r_list = coin_r_list = bull_r_list
+            coin_r_list = coin_r_list + bull_r_list
             coin_bought_list: list = get_coin_bought_list()
 
             # 당일 차익 실현한 코인
