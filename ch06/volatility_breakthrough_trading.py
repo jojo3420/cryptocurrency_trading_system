@@ -140,7 +140,17 @@ def buy_coin(ticker: str, buy_ratio: float, R: float = 0.5) -> bool or None:
                     ask_price = asks[0]['price']
                     expected_diff = ask_price - target_price
                     expected_diff_percent = round((expected_diff / ask_price * 100), 3)
-                    if expected_diff_percent > 0.6:
+
+                    # 메이저 코인과, 급등코인 노이즈, 슬리피지비율 차등 부여
+                    major_coin_list, _, __ = get_buy_wish_list()
+                    if ticker in major_coin_list:
+                        standard_noise = 0.55
+                        standard_diff_p = 0.7
+                    else:
+                        standard_noise = 0.5
+                        standard_diff_p = 4.0
+
+                    if expected_diff_percent > standard_diff_p:
                         msg = f'체결오차(슬리피지)가 너무 크므로 매수 방지: {ticker} '
                         msg += f'오차비율: {expected_diff_percent}%'
                         sql = 'UPDATE coin_buy_wish_list ' \
@@ -151,7 +161,7 @@ def buy_coin(ticker: str, buy_ratio: float, R: float = 0.5) -> bool or None:
                         return False
                     current_noise = get_current_noise(ticker)
                     noise_ma20 = calc_noise_ma_by(ticker, 20)
-                    if current_noise > 0.55:
+                    if current_noise > standard_noise:
                         msg2 = f'당일 시장상태 노이즈 심함! curr_noise: {current_noise} \n'
                         msg2 += f'{ticker} 매수 방지!'
                         log(msg2)
@@ -954,7 +964,7 @@ class FindBullCoinWorker(threading.Thread):
             _bull_tickers = find_bull_market_list()
             print(_bull_tickers)
             save_bull_coin(_bull_tickers)
-            time.sleep(1 * 60 * 60)
+            time.sleep(1 * 60 * 5)  # 5분
 
 
 def setup() -> None:
