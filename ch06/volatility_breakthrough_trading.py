@@ -1004,8 +1004,8 @@ def telebot_worker():
 
 
 if __name__ == '__main__':
-    tele_process = Process(target=telebot_worker, args=())
-    tele_process.start()
+    # tele_process = Process(target=telebot_worker, args=())
+    # tele_process.start()
     FindBullCoinWorker().start()
     try:
         setup()

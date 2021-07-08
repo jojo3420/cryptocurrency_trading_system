@@ -53,7 +53,7 @@ if __name__ == '__main__':
     # print('MA30_volume: ', calc_prev_ma_volume('BTC', 30))
     # print('current_volume', get_current_volume('BTC'))
 
-    find_bull_coin_with_noise()
+    # find_bull_coin_with_noise()
 
     # for t in tickers:
     #     is_bull: bool = is_bull_market(t)
@@ -62,3 +62,9 @@ if __name__ == '__main__':
     #         print(msg)
     #         mutation_db(sql, (today, t, get_coin_name(t)))
     #     time.sleep(0.1)
+
+    while True:
+        _bull_tickers = find_bull_market_list()
+        print('상승 코인: ', _bull_tickers)
+        save_bull_coin(_bull_tickers)
+        time.sleep(1 * 60 * 5)  # 5분
