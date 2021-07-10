@@ -24,7 +24,9 @@ if __name__ == '__main__':
     pandas.set_option('display.max_rows', None)
 
     coin_buy_wish_list, _, __ = get_buy_wish_list()
-    for ticker in coin_buy_wish_list:
+    bull_coin_list, _, __ = get_bull_coin_list()
+    print(bull_coin_list)
+    for ticker in coin_buy_wish_list + bull_coin_list:
         name = get_coin_name(ticker)
         current_noise = get_current_noise(ticker)
         MA3_NOISE = calc_noise_ma_by(ticker, 3)

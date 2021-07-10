@@ -10,7 +10,7 @@ if os.name == 'nt':
 else:
     sys.path.append('/Users/maegmini/Code/sourcetree-git/python/cryptocurrency_trading_system')
 
-from common.utils import log, select_db, mutation_many, get_today_format
+from common.utils import log, select_db, mutation_many, get_today_format, mutation_db
 import traceback
 import requests
 from bs4 import BeautifulSoup
@@ -111,9 +111,7 @@ def buy_limit_price(ticker: str, price: float, quantity: float) -> tuple or None
                     order_desc = bithumb.buy_limit_order(ticker, int(price), quantity)
                     if type(order_desc) is dict and order_desc['status'] != '0000':
                         log(f'지정가 매수 주문 실패(api 실패): {order_desc}')
-                        return None
-                    else:
-                        return order_desc
+                    return order_desc
                 else:
                     log('주문가능 수량보다 더 많은 수량을 주문했습니다.')
                     log(f'quantity: {quantity}, possible_order_quantity: {possible_order_quantity} ')
@@ -505,7 +503,7 @@ def get_current_noise(ticker: str) -> float:
             # 당일 노이즈 값
             noise: Series = 1 - abs(prices['open'] - prices['close']) / (prices['high'] - prices['low'])
             # print(noise.tail())
-            return noise[-1]
+            return round(noise[-1], 6)
     except Exception as E:
         msg = f'calc_noise_ma_by() 예외 발생. 시스템 종료되었음. {str(E)}'
         log(msg)
@@ -513,15 +511,21 @@ def get_current_noise(ticker: str) -> float:
 
 
 def save_bull_coin(tickers: list) -> None:
+    """ 상승 코인 목록 DB 저장"""
     rows = []
     today = get_today_format()
-    sql = 'REPLACE INTO bull_coin_list ' \
+    sql = 'INSERT INTO bull_coin_list ' \
           ' (date, ticker, name)' \
           ' VALUES (%s, %s, %s)  '
     for ticker in tickers:
         rows.append((today, ticker, get_coin_name(ticker)))
     mutation_many(sql, rows)
 
+
+def clear_prev_bullcoin_history(date):
+    """ 이전 상승코인 목록 삭제  """
+    sql = 'DELETE FROM bull_coin_list WHERE date = %s'
+    mutation_db(sql, date)
 
 
 if __name__ == '__main__':
@@ -545,11 +549,8 @@ if __name__ == '__main__':
     # info = get_my_order_completed_info(order_desc)
     # print(info)
     # print(get_my_coin_balance())
-    print(calc_fix_noise_ma_by('BTC', 5))
+    # print(calc_fix_noise_ma_by('BTC', 5))
 
-    noise = (0.257122 +
-             0.297297 +
-             0.474675 +
-             0.752445 +
-             0.520684) / 5
-    print(noise)
+    _balance = bithumb.get_balance('ENJ')
+    print(_balance)
+
