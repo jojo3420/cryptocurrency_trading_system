@@ -331,7 +331,7 @@ def sell(ticker: str, quantity: float, is_market=False) -> bool:
         return False
 
 
-def check_loss_sell(ticker: str, loss=3.0) -> bool:
+def check_loss_sell(ticker: str, loss=2.0) -> bool:
     """
     해당 코인 손절 대상 검사후 손절매 시장가 매도하기
     (+추가) 기본 손절 비율에  (1 - 당일 변동성) 더해줌
@@ -343,10 +343,10 @@ def check_loss_sell(ticker: str, loss=3.0) -> bool:
         noise = get_current_noise(ticker)
         noise_loss = loss + (1 - noise)
         noise_loss *= -1
-        yield_rate: float = get_yield(ticker)
-        if yield_rate < noise_loss:
+        curr_yield: float = get_yield(ticker)
+        if curr_yield < noise_loss:
             log(f'손절 원칙 금넘음. => {ticker} \n'
-                f'yield_rate:{yield_rate}%, noise_loss:{noise_loss}')
+                f'yield_rate:{curr_yield}%, noise_loss:{noise_loss}')
             # sell!
             total_qty, used_qty = get_coin_quantity(ticker)
             quantity = total_qty - used_qty
@@ -359,7 +359,7 @@ def check_loss_sell(ticker: str, loss=3.0) -> bool:
                   ' SET is_loss_sell = %s' \
                   ' WHERE ticker = %s'
             mutation_db(sql, (True, ticker))
-            save_daily_loss_sell_list(ticker, get_coin_name(ticker), yield_rate)
+            save_daily_loss_sell_list(ticker, get_coin_name(ticker), curr_yield)
             return r
         else:
             return False
@@ -1021,7 +1021,7 @@ if __name__ == '__main__':
     FindBullCoinWorker().start()
     try:
         setup()
-        loss_ratio = 3.0
+        loss_ratio = 2.0
         while True:
             coin_buy_wish_list, coin_ratio_list, coin_r_list = get_buy_wish_list()
             bull_coin_list, bull_ratio_list, bull_r_list = get_bull_coin_list()
