@@ -8,14 +8,11 @@ import time
 from pandas import DataFrame, Series
 import math
 
-
 if os.name == 'nt':
     sys.path.append('C:\\source_code\\python\\cryptocurrency_trading_system')
     sys.path.append('C:\\source_code\\cryptocurrency_trading_system')
 else:
     sys.path.append('/Users/maegmini/Code/sourcetree-git/python/cryptocurrency_trading_system')
-
-
 
 ymd_format = '%Y-%m-%d'
 
@@ -220,7 +217,7 @@ def remove_peak_log(ticker: str) -> None:
     mutation_db(sql, ticker)
 
 
-def get_bought_order_no(ticker: str, date_s: str) -> str or None:
+def get_bought_order_no(ticker: str) -> str or None:
     """
     매수 주문한 식별자 조회
     :param ticker:
@@ -228,28 +225,30 @@ def get_bought_order_no(ticker: str, date_s: str) -> str or None:
     :return:
     """
     sql = 'SELECT order_no FROM coin_bought_list ' \
-          ' WHERE is_sell = %s AND ticker = %s AND date = %s'
-    temp_t = select_db(sql, (False, ticker, date_s))
+          ' WHERE is_sell = %s AND ticker = %s'
+    temp_t = select_db(sql, (False, ticker))
     if len(temp_t) > 0:
         order_no = temp_t[0][0]
         return order_no
 
 
-def get_target_price_from(order_no: str) -> int:
+def get_target_price_from(order_no: str, ticker: str) -> int:
     """
      거래내역 테이블에서 윌리엄스 R 가격에 의한 타켓가격 조회
     :param order_no:
     :return:
     """
-    sql = "SELECT ticker, target_price FROM coin_transaction_history " \
-          " WHERE order_no = %s"
-    temp_t = select_db(sql, order_no)
-    if len(temp_t) > 0:
-        ticker, target_price = temp_t[0]
-        if target_price:
-            return int(target_price)
-        else:
-            return calc_williams_R(ticker, calc_williams_R(ticker, 0.5))
+    # print(f'order_no: {order_no}')
+    if order_no:
+        sql = "SELECT ticker, target_price FROM coin_transaction_history " \
+              " WHERE order_no = %s"
+        temp_t = select_db(sql, order_no)
+        if temp_t and len(temp_t) > 0:
+            ticker, target_price = temp_t[0]
+            if target_price:
+                return int(target_price)
+
+    return calc_williams_R(ticker, calc_williams_R(ticker, 0.5))
 
 
 def get_bull_coin_list() -> list:
@@ -279,6 +278,7 @@ def get_daily_profit_list() -> list:
     temp_t = select_db(sql, get_today_format())
     profit_list = [ticker[0] for ticker in temp_t]
     return profit_list
+
 
 def save_daily_profit_list(ticker, name, yield_ratio):
     """
@@ -335,3 +335,4 @@ if __name__ == '__main__':
 
     print(calc_fix_moving_average_by('BTC', 3))
     print(get_bull_coin_list())
+    print(get_bought_order_no('LTC'))

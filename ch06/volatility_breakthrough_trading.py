@@ -331,7 +331,7 @@ def sell(ticker: str, quantity: float, is_market=False) -> bool:
         return False
 
 
-def check_loss_sell(ticker: str, loss=2.0) -> bool:
+def check_loss_sell(ticker: str, basic_loss_ratio=2.0) -> bool:
     """
     해당 코인 손절 대상 검사후 손절매 시장가 매도하기
     (+추가) 기본 손절 비율에  (1 - 당일 변동성) 더해줌
@@ -341,12 +341,12 @@ def check_loss_sell(ticker: str, loss=2.0) -> bool:
     """
     try:
         noise = get_current_noise(ticker)
-        noise_loss = loss + (1 - noise)
-        noise_loss *= -1
+        loss_standard = basic_loss_ratio + (1 - noise)
+        loss_standard *= -1
         curr_yield: float = get_yield(ticker)
-        if curr_yield < noise_loss:
+        if curr_yield < loss_standard:
             log(f'손절 원칙 금넘음. => {ticker} \n'
-                f'yield_rate:{curr_yield}%, noise_loss:{noise_loss}')
+                f'yield_rate:{curr_yield}%, noise_loss:{loss_standard}')
             # sell!
             total_qty, used_qty = get_coin_quantity(ticker)
             quantity = total_qty - used_qty
@@ -806,15 +806,14 @@ def trailing_stop(ticker: str) -> None:
                 total, used = get_coin_quantity(ticker)
                 qty = total - used
                 log(f'[알림] {name}({ticker}): 현재 가격이 돌파 목표가격 이하로 주저 앉음')
-                order_no = get_bought_order_no(ticker, get_today_format())
-                target_price: int = get_target_price_from(order_no)
-                # 0.006 -> 0.009 로 변경  => 0.01즉 1%로 변경 -> 0.007
-                # 타켓가격 하단 1%
-                _loss_target_price = int(round(target_price - (target_price * 0.015), 5))
-                if current_price < _loss_target_price:
-                    _sell_ok: bool = sell(ticker, qty, True)
-                    log(f'하락 반전 매도결과: {_sell_ok} => {name} {qty}')
-                    # 손절매 처리는 하지 않음: 재매수 될수 있음
+                order_no = get_bought_order_no(ticker)
+                if order_no:
+                    target_price: int = get_target_price_from(order_no, ticker)
+                    loss_standard_price = target_price - (target_price * 0.02)
+                    if current_price < loss_standard_price:
+                        _sell_ok: bool = sell(ticker, qty, True)
+                        log(f'하락 반전 매도결과: {_sell_ok} => {name} {qty}')
+                        # 손절매 처리는 하지 않음: 재매수 될수 있음
     except Exception as e:
         log_msg = f'trailing_stop() 예외발생 {ticker} -> {str(e)}'
         log(log_msg)
@@ -1021,7 +1020,7 @@ if __name__ == '__main__':
     FindBullCoinWorker().start()
     try:
         setup()
-        loss_ratio = 2.0
+        basic_loss_ratio = 2.0  # 기본 손절선
         while True:
             coin_buy_wish_list, coin_ratio_list, coin_r_list = get_buy_wish_list()
             bull_coin_list, bull_ratio_list, bull_r_list = get_bull_coin_list()
@@ -1056,9 +1055,9 @@ if __name__ == '__main__':
 
             # 총수익률이  -6 이하일 경우 종목의 손절 비율 타이트 만듬
             if yields < -8.0:
-                loss_ratio = loss_ratio * 0.7
+                basic_loss_ratio = basic_loss_ratio * 0.7
                 msg = f'계좌 총 수익률 -8% 도달 \n' \
-                      f'손절라인 변경: {loss_ratio}'
+                      f'손절라인 변경: {basic_loss_ratio}'
                 telegram_bot.send_coin_bot(msg)
                 log(msg)
 
@@ -1080,7 +1079,7 @@ if __name__ == '__main__':
 
             # 손절매 확인
             for ticker in coin_bought_list:
-                check_loss_sell(ticker, loss_ratio)
+                check_loss_sell(ticker, basic_loss_ratio)
                 time.sleep(1)
 
             # 텔레그램 수익률 보고!
