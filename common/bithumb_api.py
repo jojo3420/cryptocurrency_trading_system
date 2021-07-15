@@ -10,7 +10,7 @@ if os.name == 'nt':
 else:
     sys.path.append('/Users/maegmini/Code/sourcetree-git/python/cryptocurrency_trading_system')
 
-from common.utils import log, select_db, mutation_many, get_today_format, mutation_db
+from common.utils import log, select_db, mutation_many, get_today_format, mutation_db, calc_target_volatility_ratio
 import traceback
 import requests
 from bs4 import BeautifulSoup
@@ -510,15 +510,32 @@ def get_current_noise(ticker: str) -> float:
         traceback.print_exc()
 
 
-def save_bull_coin(tickers: list) -> None:
+def calc_add_noise_weight(ticker: str) -> float:
+    """
+    포트폴리오 노이즈 가중치 계산
+    공식
+        (1 - 3일 이동평균 노이즈) / 4
+    :param ticker:
+    :return:
+    """
+    noise_ma3 = calc_fix_noise_ma_by(ticker, 3)
+    noise_weight = (1 - noise_ma3) / 4
+    return noise_weight
+
+
+def save_bull_coin(bull_tickers: list) -> None:
     """ 상승 코인 목록 DB 저장"""
     rows = []
     today = get_today_format()
     sql = 'INSERT INTO bull_coin_list ' \
-          ' (date, ticker, name)' \
-          ' VALUES (%s, %s, %s)  '
-    for ticker in tickers:
-        rows.append((today, ticker, get_coin_name(ticker)))
+          ' (date, ticker, name, ratio)' \
+          ' VALUES (%s, %s, %s, %s)  '
+    init_ratio = 0.01
+    for ticker in bull_tickers:
+        noise_weight = calc_add_noise_weight(ticker)
+        ratio = calc_target_volatility_ratio(ticker)
+        ratio = init_ratio + (ratio / len(bull_tickers)) + noise_weight
+        rows.append((today, ticker, get_coin_name(ticker), ratio))
     mutation_many(sql, rows)
 
 
@@ -553,4 +570,4 @@ if __name__ == '__main__':
 
     _balance = bithumb.get_balance('ENJ')
     print(_balance)
-
+    print(calc_target_volatility_ratio('ENJ'))

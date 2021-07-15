@@ -316,10 +316,90 @@ def save_daily_loss_sell_list(ticker, name, yield_ratio):
     mutation_db(sql, (today, ticker, name, yield_ratio))
 
 
+def save_daily_profit_and_loss():
+    """
+    거래내역 기준(transaction_history) 당일 매수/매도 기록에 따른
+    수익 / 손실 비율 기록
+    시스템 종료 시점에 실행
+    """
+
+    def _calc(r_tuple: list) -> tuple:
+        _r, _sum, _cnt, _avg = [], 0, 0, 0
+        for _ticker, _yield_ratio in r_tuple:
+            print(_ticker, _yield_ratio)
+            _r.append(_yield_ratio)
+
+        if _r:
+            _sum = sum(_r)
+            _cnt = len(_r)
+            _avg = _sum / _cnt
+        return _sum, _avg, _cnt
+
+    # 손실 거래내역
+    sql = 'SELECT ticker, yield_ratio ' \
+          ' FROM coin_transaction_history ' \
+          ' WHERE date = %s ' \
+          ' AND position = %s ' \
+          ' AND type IN (%s, %s)'
+    today = get_today_format()
+    loss_t = select_db(sql, (today, 'S', '손절매', '반전하락'))
+    loss_sum, loss_avg, loss_cnt = _calc(loss_t)
+
+    sql = 'SELECT ticker, yield_ratio ' \
+          ' FROM coin_transaction_history ' \
+          ' WHERE date = %s' \
+          ' AND position = %s ' \
+          ' AND type IN (%s, %s, %s)'
+    profit_t = select_db(sql, (today, 'S', '시가청산', '당일청산', '상한가도달'))
+    profit_sum, profit_avg, profit_cnt = _calc(profit_t)
+
+    simple_total = profit_sum + loss_sum
+    print('당일 트레이딩 단순 합계 결과:', simple_total)
+
+    save_sql = ' INSERT INTO daily_profit_and_loss_history ' \
+               ' (date, profit_sum, profit_avg, profit_cnt, loss_sum, loss_avg, loss_cnt, simple_total) ' \
+               ' VALUES (%s, %s, %s, %s, %s, %s, %s, %s)'
+    mutation_db(save_sql, (today, profit_sum, profit_avg, profit_cnt, loss_sum, loss_avg, loss_cnt, simple_total))
+
+
+def calc_target_volatility_ratio(ticker: str, target_loss_ratio=2) -> float:
+    """
+    목표(허용) 가능한 변동성 수준만큼 투자자산의 전일 변동성에 따른 투자 비율 계산
+    허용가능한 손실% / 전일 변동성
+    :param ticker:
+    :param target_loss_ratio:
+
+    :return:
+    """
+    prev_volatility = calc_prev_volatility(ticker)
+    return round(target_loss_ratio / prev_volatility, 5)
+
+
+def save_yield_history(total_yield: float, stock_cnt: int) -> None:
+    """
+    수익률 계산후 저장
+     - 주어진 +총수익률에 손절매 합계하여 현재 수익률 DB 저장
+    """
+    today = get_today_format()
+    loss_sql = 'SELECT yield_ratio FROM coin_transaction_history ' \
+               ' WHERE date = %s AND position = %s'
+    loss_tup = select_db(loss_sql, (today, 'ask'))
+    loss_list = [yields[0] for yields in loss_tup]
+    total_loss_yield = 0
+    if loss_list:
+        total_loss_yield = sum(loss_list) / len(loss_list)
+
+    yields = total_yield + total_loss_yield
+    sql = 'INSERT INTO coin_yield_timeline ' \
+          ' (date, yield_rate, stock_cnt) ' \
+          ' VALUES (%s, %s, %s)'
+    mutation_db(sql, (today, yields, stock_cnt))
+
+
 if __name__ == '__main__':
     # conn = create_conn('.env')
     # print(conn)
-    # print(get_today_format())
+    print(get_today_format())
 
     # print('비트코인 오늘 변동성: ', calc_now_volatility('BTC'))
     # print('비트코인 전일 변동성: ', calc_prev_volatility('BTC'))
@@ -333,6 +413,7 @@ if __name__ == '__main__':
     #
     # print(pybithumb.get_orderbook('BTC'))
 
-    print(calc_fix_moving_average_by('BTC', 3))
-    print(get_bull_coin_list())
-    print(get_bought_order_no('LTC'))
+    # print(calc_fix_moving_average_by('BTC', 3))
+    # print(get_bull_coin_list())
+    # print(get_bought_order_no('LTC'))
+    print(calc_target_volatility_ratio('SAND'))
