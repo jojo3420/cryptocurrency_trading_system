@@ -1,5 +1,6 @@
 import time
-
+import traceback
+import requests
 import pybithumb
 import os
 import sys
@@ -10,11 +11,9 @@ if os.name == 'nt':
 else:
     sys.path.append('/Users/maegmini/Code/sourcetree-git/python/cryptocurrency_trading_system')
 
-from common.utils import log, select_db, mutation_many, get_today_format, mutation_db, calc_target_volatility_ratio
-import traceback
-import requests
 from bs4 import BeautifulSoup
 from pandas import DataFrame, Series
+from common.utils import log, select_db, mutation_many, get_today_format, mutation_db, calc_target_volatility_ratio
 
 
 def read_bithumb_key(filepath: str) -> dict:
@@ -523,26 +522,7 @@ def calc_add_noise_weight(ticker: str) -> float:
     return noise_weight
 
 
-def save_bull_coin(bull_tickers: list) -> None:
-    """ 상승 코인 목록 DB 저장"""
-    rows = []
-    today = get_today_format()
-    sql = 'INSERT INTO bull_coin_list ' \
-          ' (date, ticker, name, ratio)' \
-          ' VALUES (%s, %s, %s, %s)  '
-    init_ratio = 0.01
-    for ticker in bull_tickers:
-        noise_weight = calc_add_noise_weight(ticker)
-        ratio = calc_target_volatility_ratio(ticker)
-        ratio = init_ratio + (ratio / len(bull_tickers)) + noise_weight
-        rows.append((today, ticker, get_coin_name(ticker), ratio))
-    mutation_many(sql, rows)
 
-
-def clear_prev_bullcoin_history(date):
-    """ 이전 상승코인 목록 삭제  """
-    sql = 'DELETE FROM bull_coin_list WHERE date = %s'
-    mutation_db(sql, date)
 
 
 if __name__ == '__main__':

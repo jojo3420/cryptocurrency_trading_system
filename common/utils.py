@@ -8,6 +8,7 @@ import time
 from pandas import DataFrame, Series
 import math
 
+
 if os.name == 'nt':
     sys.path.append('C:\\source_code\\python\\cryptocurrency_trading_system')
     sys.path.append('C:\\source_code\\cryptocurrency_trading_system')
@@ -255,8 +256,10 @@ def get_bull_coin_list() -> list:
     """ DB에 저장된 상승중인 코인 목록 리스트로 조회 """
     today = get_today_format()
     sql = 'SELECT ticker, ratio, R FROM bull_coin_list' \
-          ' WHERE date = %s'
-    temp_t = select_db(sql, today)
+          ' WHERE date = %s ' \
+          ' AND disabled = %s ' \
+          ' AND already_buy = %s'
+    temp_t = select_db(sql, (today, False, False))
     bull_coin_list = []
     bull_ratio_list = []
     bull_r_list = []
@@ -396,6 +399,53 @@ def save_yield_history(total_yield: float, stock_cnt: int) -> None:
     mutation_db(sql, (today, yields, stock_cnt))
 
 
+def disabled_buy_wish_list(ticker: str, is_major: bool) -> None:
+    if is_major:
+        sql = 'UPDATE coin_buy_wish_list ' \
+              ' SET is_loss_sell = %s ' \
+              ' WHERE ticker = %s '
+    else:
+        sql = 'UPDATE bull_coin_list ' \
+              ' SET disabled = %s ' \
+              ' WHERE ticker = %s'
+    mutation_db(sql, (True, ticker))
+
+
+def is_bull_coin(ticker: str) -> bool:
+    """
+        급등 코인 여부 True/False
+    """
+    sql = 'SELECT ticker FROM coin_buy_wish_list'
+    major_coin_list = select_db(sql)
+    if ticker in major_coin_list:
+        return True
+    return False
+
+
+def clear_prev_bull_coin_history(date):
+    """ 이전 상승코인 목록 삭제  """
+    sql = 'DELETE FROM bull_coin_list WHERE date = %s'
+    mutation_db(sql, date)
+
+
+def save_bull_coin(bull_tickers: list) -> None:
+    """ 상승 코인 목록 DB 저장"""
+    from common.bithumb_api import get_coin_name
+    rows = []
+    today = get_today_format()
+    sql = 'INSERT INTO bull_coin_list ' \
+          ' (date, ticker, name, ratio)' \
+          ' VALUES (%s, %s, %s, %s)  '
+    init_ratio = 0.01
+    for ticker in bull_tickers:
+        # noise_weight = calc_add_noise_weight(ticker)
+        # ratio = calc_target_volatility_ratio(ticker)
+        # ratio = init_ratio + (ratio / len(bull_tickers)) + noise_weight
+        ratio = 0.03
+        rows.append((today, ticker, get_coin_name(ticker), ratio))
+    mutation_many(sql, rows)
+
+
 if __name__ == '__main__':
     # conn = create_conn('.env')
     # print(conn)
@@ -416,4 +466,5 @@ if __name__ == '__main__':
     # print(calc_fix_moving_average_by('BTC', 3))
     # print(get_bull_coin_list())
     # print(get_bought_order_no('LTC'))
-    print(calc_target_volatility_ratio('SAND'))
+    # print(calc_target_volatility_ratio('SAND'))
+    print(is_bull_coin('SAND'))

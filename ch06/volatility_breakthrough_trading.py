@@ -12,10 +12,11 @@ else:
 from datetime import datetime
 from common import telegram_bot
 from common.bithumb_api import *
-from common.utils import mutation_db, select_db, get_today_format, calc_prev_volatility, calc_moving_average_by, \
+from common.utils import mutation_db, select_db, get_today_format, calc_moving_average_by, \
     calc_williams_R, calc_fix_moving_average_by, remove_peak_log, get_bought_order_no, get_target_price_from, \
     get_bull_coin_list, save_daily_profit_list, get_daily_profit_list, get_daily_loss_sell_list, \
-    save_daily_loss_sell_list, save_daily_profit_and_loss, save_yield_history
+    save_daily_loss_sell_list, save_daily_profit_and_loss, save_yield_history, disabled_buy_wish_list, is_bull_coin, \
+    clear_prev_bull_coin_history, save_bull_coin
 
 
 def save_bought_list(order_desc: tuple) -> None:
@@ -36,6 +37,13 @@ def save_bought_list(order_desc: tuple) -> None:
               f" (order_no, date, ticker, is_sell)" \
               f" VALUES (%s, %s, %s, %s) "
         mutation_db(sql, (order_no, get_today_format(), _ticker, 0))
+
+        is_bull = is_bull_coin(_ticker)
+        if is_bull is True:
+            sql = 'UPDATE bull_coin_list SET already_buy = %s ' \
+                  ' WHERE ticker = %s'
+            mutation_db(sql, (True, _ticker))
+
     except Exception as e:
         log(f'save_bought_list() 예외발생.. 매수실패 {str(e)}')
         traceback.print_exc()
@@ -143,20 +151,20 @@ def buy_coin(ticker: str, buy_ratio: float, R: float = 0.5) -> bool or None:
 
                     # 메이저 코인과, 급등코인 노이즈, 슬리피지비율 차등 부여
                     major_coin_list, _, __ = get_buy_wish_list()
+                    is_major = True
                     if ticker in major_coin_list:
                         standard_noise = 0.55
                         standard_diff_p = 0.7
+
                     else:
-                        standard_noise = 0.5
+                        standard_noise = 0.3
                         standard_diff_p = 4.0
+                        is_major = False
 
                     if expected_diff_percent > standard_diff_p:
                         msg = f'체결오차(슬리피지)가 너무 크므로 매수 방지: {ticker} '
                         msg += f'오차비율: {expected_diff_percent}%'
-                        sql = 'UPDATE coin_buy_wish_list ' \
-                              ' SET is_loss_sell = %s' \
-                              ' WHERE ticker = %s '
-                        mutation_db(sql, (True, ticker))
+                        disabled_buy_wish_list(ticker, is_major)
                         log(msg)
                         return False
                     current_noise = get_current_noise(ticker)
@@ -952,8 +960,8 @@ def find_bull_market_list() -> list:
             # volume = calc_prev_ma_volume()
             # print(ticker, curr_noise, noise_ma3, noise_ma5)
             if curr_price > MA3 and curr_price > MA5 \
-                    and curr_price > target_price and curr_noise <= 0.3 \
-                    and noise_ma3 < 0.6 and noise_ma5 < 0.6:
+                    and curr_price > target_price and curr_noise < 0.3 \
+                    and noise_ma3 < 0.55 and noise_ma5 < 0.55:
                 print(f'상승코인: {ticker}, curr_noise: {curr_noise}, noise_ma3: {noise_ma3}, noise_ma5: {noise_ma5}')
                 _list.append(ticker)
         except Exception as E:
@@ -970,7 +978,7 @@ class FindBullCoinWorker(threading.Thread):
         while True:
             _bull_tickers = find_bull_market_list()
             print('급등 코인 목록: ', _bull_tickers)
-            clear_prev_bullcoin_history(get_today_format())
+            clear_prev_bull_coin_history(get_today_format())
             save_bull_coin(_bull_tickers)
             time.sleep(1 * 60 * 5)  # 5분
 
