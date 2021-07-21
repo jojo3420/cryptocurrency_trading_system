@@ -1074,8 +1074,9 @@ if __name__ == '__main__':
                         buy_coin(ticker, coin_ratio_list[i], R)
                         time.sleep(0.5)
                     else:
-                        trailing_stop(ticker)
-                        time.sleep(0.5)
+                        if coin_bought_list:
+                            trailing_stop(ticker)
+                            time.sleep(0.5)
 
             # 손절매 확인
             for ticker in coin_bought_list:
