@@ -527,13 +527,15 @@ def get_coin_bought_list() -> list:
 def get_total_yield() -> float:
     """ 현재 포트폴리오 코인 총 수익률 """
     try:
-        yields = 0
+        total_yield = 0
         _coin_bought_list = get_coin_bought_list()
         for sym in _coin_bought_list:
             yid = get_yield(sym)
-            if yid is not None:
-                yields += yid
-        return yields
+            if yid:
+                total_yield += yid
+        if coin_bought_list:
+            total_yield = round(total_yield / len(_coin_bought_list), 5)
+        return total_yield
     except Exception as ex:
         log(f'get_total_yield() 예외발생 {str(ex)}')
         traceback.print_exc()
