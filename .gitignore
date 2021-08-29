@@ -2,4 +2,5 @@ venv
 *.pyc
 .env
 .idea
-/.env.local
+.env.local
+.env.dev
