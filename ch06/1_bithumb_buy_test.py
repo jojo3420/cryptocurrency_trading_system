@@ -1,6 +1,7 @@
 import time
 import pybithumb
 from common.utils import *
+from common.bithumb_api import read_bithumb_key
 
 bit_keys: dict = read_bithumb_key('.env.local')
 print(bit_keys)
@@ -31,7 +32,7 @@ def buy_limit_price(ticker: str, price: float, quantity: float) -> tuple:
         orderbook = pybithumb.get_orderbook(ticker)
         asks = orderbook['asks']
         possible_order_quantity = order_krw / asks[0]['price']
-        if len(asks) > 0:
+        if asks and len(asks) > 0:
             if possible_order_quantity >= quantity:
                 order = bithumb.buy_limit_order(ticker, price, quantity)
                 return order

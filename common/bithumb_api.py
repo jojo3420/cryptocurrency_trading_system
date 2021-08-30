@@ -61,7 +61,7 @@ def get_krw_balance() -> tuple:
         return 0, 0
 
 
-def calc_buy_quantity(ticker: str) -> float:
+def calc_buy_quantity(ticker: str, order_krw=None) -> float:
     """
     매수 가능한 수량 계산(수수료 미고려)
     본인 계좌의 원화 잔고를 조회후 최우선 매도 호가금액을 조회후 매수할수 있는 갯수 계산
@@ -72,7 +72,8 @@ def calc_buy_quantity(ticker: str) -> float:
         active_ticker: list = pybithumb.get_tickers()
         if ticker in active_ticker:
             total_krw, use_krw = get_krw_balance()
-            order_krw = total_krw - use_krw
+            if order_krw is None:
+                order_krw = total_krw - use_krw
             # print(f'보유 원화: {total_krw:,}')
             orderbook: dict = pybithumb.get_orderbook(ticker)
             # 매도 호가
@@ -183,7 +184,7 @@ def sell_market_price(ticker: str, quantity: float) -> tuple:
         traceback.print_exc()
 
 
-def sell_limit_price(ticker: str, price: float, quantity: float) -> tuple:
+def sell_limit_price(ticker: str, price: int, quantity: float) -> tuple:
     """
     지정가 매도
     :param ticker: 코인티커
@@ -196,8 +197,10 @@ def sell_limit_price(ticker: str, price: float, quantity: float) -> tuple:
         order_coin_qty = coin_total - coin_use
         orderbook: dict = bithumb.get_orderbook(ticker)
         bids: list = orderbook['bids']
-        if len(bids) > 0:
+        if bids and len(bids) > 0:
             if order_coin_qty >= quantity:
+                # if isinstance(price, int):
+                #     price = int(price)
                 order = bithumb.sell_limit_order(ticker, price, quantity)
                 return order
             else:
@@ -340,7 +343,7 @@ def get_my_coin_balance() -> dict or None:
             available = total - used
             if total > 0.0001:
                 curr_price = pybithumb.get_current_price(ticker)
-                if curr_price * total > 1000:
+                if curr_price * total > 2000:
                     balance[ticker] = (total, used, available)
         return balance
     else:
@@ -520,9 +523,6 @@ def calc_add_noise_weight(ticker: str) -> float:
     noise_ma3 = calc_fix_noise_ma_by(ticker, 3)
     noise_weight = (1 - noise_ma3) / 4
     return noise_weight
-
-
-
 
 
 if __name__ == '__main__':
