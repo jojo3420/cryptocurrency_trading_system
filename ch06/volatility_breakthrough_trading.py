@@ -187,32 +187,35 @@ def buy_coin(ticker: str, buy_ratio: float, R: float = 0.5) -> bool or None:
                     #  지정가 매수 주문 실패(api 실패):
                     #  {'status': '5600', 'message': '최소 주문금액은 500 KRW 입니다.'}
                     if order_desc and isinstance(order_desc, tuple):
-                        completed_order: tuple = get_my_order_completed_info(order_desc)
-                        if completed_order is None:
+                        completed_order = get_my_order_completed_info(order_desc)
+                        log(f'completed_order: {completed_order}')
+                        # 중복 매수 방지
+                        # if completed_order is None:
                             # ------------------------------------------------------------
                             # 시장가 매수 주문!
-                            order_desc: tuple = buy_market_price(ticker, buy_qty)
-                            time.sleep(0.1)
-                            completed_order: tuple = get_my_order_completed_info(order_desc)
+                            # order_desc: tuple = buy_market_price(ticker, buy_qty)
+                            # time.sleep(0.1)
+                            # completed_order: tuple = get_my_order_completed_info(order_desc)
                             # ------------------------------------------------------------
                         # 거래타입, 코인티커, 가격, 수량 ,수수료(krw), 거래금액)
-                        order_type, _ticker, price, order_qty, fee, transaction_krw_amount = completed_order
-                        # insert bought list
-                        save_bought_list((ticker, order_desc[2]))
-                        order_desc = list(order_desc)
-                        diff = price - target_price
-                        diff_percent = round(diff / price * 100, 3)
-                        order_desc.extend(
-                            [price, order_qty, target_price, R, fee, transaction_krw_amount, diff, diff_percent,
-                             current_noise, noise_ma20, type_str])
-                        save_transaction_history(order_desc)
-                        log(f'매수주문성공: {ticker} {order_desc[2]}')
-                        msg = f'[매수알림] {ticker} \n' \
-                              f'가격: {price} 수량: {round(buy_qty, 4)}개 \n' \
-                              f'슬리피지: {diff} \n' \
-                              f'슬리피지 비율: {round(diff_percent, 3)}%'
-                        telegram_bot.send_coin_bot(msg)
-                        return True
+                        if completed_order:
+                            order_type, _ticker, price, order_qty, fee, transaction_krw_amount = completed_order
+                            # insert bought list
+                            save_bought_list((ticker, order_desc[2]))
+                            order_desc = list(order_desc)
+                            diff = price - target_price
+                            diff_percent = round(diff / price * 100, 3)
+                            order_desc.extend(
+                                [price, order_qty, target_price, R, fee, transaction_krw_amount, diff, diff_percent,
+                                 current_noise, noise_ma20, type_str])
+                            save_transaction_history(order_desc)
+                            log(f'매수주문성공: {ticker} {order_desc[2]}')
+                            msg = f'[매수알림] {ticker} \n' \
+                                  f'가격: {price} 수량: {round(buy_qty, 4)}개 \n' \
+                                  f'슬리피지: {diff} \n' \
+                                  f'슬리피지 비율: {round(diff_percent, 3)}%'
+                            telegram_bot.send_coin_bot(msg)
+                            return True
                     elif order_desc and type(order_desc) is dict and order_desc['status'] != '0000':
                         print(order_desc)
                         print('지정가 매수 주문 실패. 시장가 매수 해야 함..')
@@ -303,7 +306,7 @@ def sell(ticker: str, quantity: float, is_market=False) -> bool:
     :param quantity:
     :return:
     """
-    log(f'sell() => {ticker} {quantity}개')
+    log(f'매도 sell() => {ticker} {quantity}개')
     type_str = ''
     try:
         if is_market is True:
@@ -312,10 +315,10 @@ def sell(ticker: str, quantity: float, is_market=False) -> bool:
         else:
             order_book = pybithumb.get_orderbook(ticker)
             bids: list = order_book['bids']
-            print('매수호가 :', bids)
-            bid_price = bids[0]['price']
+            # print('매수호가 :', bids)
+            bid_price = int(bids[0]['price'])
             order_desc: tuple = sell_limit_price(ticker, bid_price, quantity)
-            print(order_desc)
+            print(f'order_desc: {order_desc}')
             time.sleep(0.1)
             if type(order_desc) is dict and order_desc['status'] != '0000':
                 return sell(ticker, quantity, is_market=False)
