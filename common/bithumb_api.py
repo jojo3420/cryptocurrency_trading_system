@@ -89,7 +89,7 @@ def calc_buy_quantity(ticker: str, order_krw=None) -> float:
         return 0
 
 
-def buy_limit_price(ticker: str, price: float, quantity: float) -> tuple or None:
+def buy_limit_price(ticker: str, price: float, quantity: float, market='KRW') -> tuple or None:
     """
     지정가 매수 주문
     :param ticker:
@@ -99,16 +99,22 @@ def buy_limit_price(ticker: str, price: float, quantity: float) -> tuple or None
         주문타입, 코인티커, 주문번호, 주문 통화
     """
     try:
-        if ticker in pybithumb.get_tickers():
+        if ticker in pybithumb.get_tickers(payment_currency=market):
             # 지정가 주문
-            total_krw, use_krw = get_krw_balance()
-            order_krw = total_krw - use_krw
-            orderbook = pybithumb.get_orderbook(ticker)
+            total_krw, used_krw = get_krw_balance()
+            cash = total_krw - used_krw
+            orderbook = pybithumb.get_orderbook(ticker, payment_currency=market)
             asks = orderbook['asks']
-            possible_order_quantity = order_krw / asks[0]['price']
-            if len(asks) > 0 and order_krw > 0:
+            if len(asks) > 0 and cash > 0:
+                ask_price = asks[0]['price']
+                possible_order_quantity = cash / ask_price
                 if possible_order_quantity >= quantity:
-                    order_desc = bithumb.buy_limit_order(ticker, int(price), quantity)
+                    # 가격에 int() 제거
+                    if str(ask_price).find('.') > -1:
+                        print(price, type(price))
+                    else:
+                        price = int(price)
+                    order_desc = bithumb.buy_limit_order(ticker, price, quantity)
                     if type(order_desc) is dict and order_desc['status'] != '0000':
                         log(f'지정가 매수 주문 실패(api 실패): {order_desc}')
                     return order_desc
@@ -117,7 +123,9 @@ def buy_limit_price(ticker: str, price: float, quantity: float) -> tuple or None
                     log(f'quantity: {quantity}, possible_order_quantity: {possible_order_quantity} ')
                     return None
             else:
-                log('주문 호가가 존재하지 않습니다.')
+                log('주문 호가가 존재하지 않거나 캐쉬가 충분하지 않습니다.')
+                print(asks, cash)
+
     except Exception as e:
         log(f'buy_limit_price() 예외 발생:  {str(e)}')
         traceback.print_exc()
@@ -325,30 +333,31 @@ def get_coin_name(ticker: str) -> str:
         get_coin_name(ticker)
 
 
-def get_my_coin_balance() -> dict or None:
+def get_my_coin_balance(symbol='ALL') -> dict or None:
     """ 보유한 코인 장고 조회
     조건: 보유 수량이 0.0001 보다 많으면서 보유한 코인 평가금액이 1000원 이상인 코인
     return  {'ticker': (total, used, available)}
     보유한 잔고가 없을경우 빈 dict 리턴
     통신 오류일 경우 None 리턴
     """
-    all_balance = bithumb.get_balance('ALL')
-    tickers = pybithumb.get_tickers()
-    balance = {}
-    if all_balance['status'] == '0000':
-        data = all_balance['data']
-        for ticker in tickers:
-            total = float(data[f'total_{ticker.lower()}'])
-            used = float(data[f'in_use_{ticker.lower()}'])
-            available = total - used
-            if total > 0.0001:
-                curr_price = pybithumb.get_current_price(ticker)
-                if curr_price * total > 2000:
-                    balance[ticker] = (total, used, available)
-        return balance
+    if symbol == 'ALL':
+        all_balance = bithumb.get_balance('ALL')
+        tickers = pybithumb.get_tickers()
+        balance = {}
+        if all_balance['status'] == '0000':
+            data = all_balance['data']
+            for ticker in tickers:
+                total = float(data[f'total_{ticker.lower()}'])
+                used = float(data[f'in_use_{ticker.lower()}'])
+                available = total - used
+                if total > 0.0001:
+                    curr_price = pybithumb.get_current_price(ticker)
+                    if curr_price * total > 2000:
+                        balance[ticker] = (total, used, available)
+            return balance
     else:
-        log(f"통신오류 => 예외코드: {all_balance['status']}")
-        return None
+        coin_qty, used_coin_qty, _total_krw, _used_krw = bithumb.get_balance(symbol)
+        return coin_qty, used_coin_qty
 
 
 def get_prev_volume(ticker: str) -> float or None:
@@ -523,6 +532,10 @@ def calc_add_noise_weight(ticker: str) -> float:
     noise_ma3 = calc_fix_noise_ma_by(ticker, 3)
     noise_weight = (1 - noise_ma3) / 4
     return noise_weight
+
+
+def cancel_order(order_desc) -> bool:
+    return bithumb.cancel_order(order_desc)
 
 
 if __name__ == '__main__':
