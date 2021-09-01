@@ -4,15 +4,29 @@ import json
 
 
 async def bithumb_ws_client():
+    """
+    api doc: https://apidocs.bithumb.com/docs/websocket_public
+    :return:
+    """
+
     uri = 'wss://pubwss.bithumb.com/pub/ws'
     async with websockets.connect(uri, ping_interval=None) as socket:
         response = await socket.recv()
         print(response)
 
         subscribe_fmt = {
+            # 티커
             'type': 'ticker',
-            'symbols': ['BTC_KRW', 'ETH_KRW'],
-            'tickTypes': ['30M']
+            'symbols': ['BTC_KRW'],
+            'tickTypes': ['30M'],
+
+            # 변경 호가
+            # 'type': 'orderbookdepth',
+            # 'symbols': ['BTC_KRW'],
+
+            # 체결
+            # {"type": "transaction", "symbols": ["BTC_KRW", "ETH_KRW"]}
+
         }
         subscribe_json = json.dumps(subscribe_fmt)
         await socket.send(subscribe_json)
