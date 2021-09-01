@@ -502,6 +502,8 @@ def get_coin_bought_list() -> list:
         coin_balance: dict = get_my_coin_balance()
         if coin_balance:
             return list(coin_balance.keys())
+        elif isinstance(coin_balance, dict) and len(coin_balance) == 0:
+            return []
     except Exception as ex:
         log(f'get_coin_bought_list() 예외발생 {str(ex)}')
         traceback.print_exc()
@@ -509,6 +511,8 @@ def get_coin_bought_list() -> list:
         tickers_tup: tuple = select_db(sql, False)
         if tickers_tup:
             return [tup[0] for tup in tickers_tup]
+        elif isinstance(tickers_tup, tuple) and len(tickers_tup) == 0:
+            return []
 
 
 
