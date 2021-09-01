@@ -8,12 +8,12 @@ import time
 from pandas import DataFrame, Series
 import math
 
-
 if os.name == 'nt':
     sys.path.append('C:\\source_code\\python\\cryptocurrency_trading_system')
     sys.path.append('C:\\source_code\\cryptocurrency_trading_system')
 else:
     sys.path.append('/Users/maegmini/Code/sourcetree-git/python/cryptocurrency_trading_system')
+
 
 ymd_format = '%Y-%m-%d'
 
@@ -430,7 +430,7 @@ def clear_prev_bull_coin_history(date):
 
 def save_bull_coin(bull_tickers: list) -> None:
     """ 상승 코인 목록 DB 저장"""
-    from common.bithumb_api import get_coin_name
+    from common.bithumb_api import get_coin_name, calc_add_noise_weight
     rows = []
     today = get_today_format()
     sql = 'INSERT INTO bull_coin_list ' \
@@ -438,11 +438,11 @@ def save_bull_coin(bull_tickers: list) -> None:
           ' VALUES (%s, %s, %s, %s)  '
     init_ratio = 0.01
     for ticker in bull_tickers:
-        # noise_weight = calc_add_noise_weight(ticker)
-        # ratio = calc_target_volatility_ratio(ticker)
-        # ratio = init_ratio + (ratio / len(bull_tickers)) + noise_weight
-        ratio = 0.03
-        rows.append((today, ticker, get_coin_name(ticker), ratio))
+        noise_weight = calc_add_noise_weight(ticker)
+        ratio = calc_target_volatility_ratio(ticker)
+        position_size = init_ratio + (ratio / len(bull_tickers)) + noise_weight
+        # ratio = 0.03
+        rows.append((today, ticker, get_coin_name(ticker), position_size))
     mutation_many(sql, rows)
 
 
