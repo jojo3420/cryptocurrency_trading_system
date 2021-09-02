@@ -1033,7 +1033,7 @@ if __name__ == '__main__':
                     # if ticker in daily_profit_list + daily_loss_coin_list:
                     # 당일 수익창출 또는 당일 손절매 코인 당일 재매수 제외
                     # continue
-                    if not coin_bought_list:
+                    if coin_bought_list is None:
                         break
                     if ticker not in coin_bought_list:
                         R = calc_R(ticker, coin_r_list[i])
