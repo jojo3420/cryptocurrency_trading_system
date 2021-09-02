@@ -1,11 +1,11 @@
 import pybithumb
 
-from common.bithumb_api import sell_limit_price, get_coin_quantity, get_my_coin_balance
+from common.bithumb_api import sell_limit_price, get_balance_coin, get_my_coin_balance
 
 # ticker = 'ONG'
 my_coin_balance = get_my_coin_balance()
 for ticker, (_total, _used, available) in my_coin_balance.items():
-    qty = get_coin_quantity(ticker)
+    qty = get_balance_coin(ticker)
     qty = qty[0] - qty[1]
     order_book = pybithumb.get_orderbook(ticker)
     print(order_book)

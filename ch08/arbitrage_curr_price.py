@@ -6,7 +6,7 @@ import asyncio
 import json
 
 
-from common.bithumb_api import buy_limit_price, get_my_coin_balance, cancel_order, calc_buy_quantity, get_krw_balance, sell_limit_price
+from common.bithumb_api import buy_limit_price, get_my_coin_balance, cancel_order, calc_buy_quantity, get_krw_balance, sell_limit_price, get_balance_coin
 from common.math_util import get_uptic_price
 
 _btc_market_tickers = pybithumb.get_tickers(payment_currency='BTC')
@@ -61,6 +61,7 @@ def analysis_transaction(data: dict):
     # cash = total_cash - used_cash
     # cash = cash / 4
     # TODO BTC 잔고 확보해야
+
 
     content = data.get('content', '')
     # print(content)

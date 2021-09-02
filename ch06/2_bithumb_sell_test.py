@@ -9,7 +9,7 @@ bithumb = pybithumb.Bithumb(connectKey, secretKey)
 
 
 
-# total_coin_q, sell_use = get_coin_quantity('XLM')
+# total_coin_q, sell_use = get_balance_coin('XLM')
 # sell_limit_price('XLM', 400, total_coin_q - sell_use)
 
 order_info = sell_market_price('XLM', 5)

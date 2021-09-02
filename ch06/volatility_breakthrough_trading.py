@@ -243,7 +243,7 @@ def sell_all():
                 return True
 
             for ticker in _coin_bought_list:
-                total_qty, used_qty = get_coin_quantity(ticker)
+                total_qty, used_qty = get_balance_coin(ticker)
                 coin_quantity = total_qty - used_qty
                 if coin_quantity > 0:
                     buy_price, _qty = get_bought_price_and_qty(ticker)
@@ -346,7 +346,7 @@ def check_loss_sell(ticker: str, basic_loss_ratio=2.0) -> bool:
         if curr_yield < loss_standard:
             log(f'손절 => {ticker}, yield_rate:{curr_yield}%, noise_loss:{loss_standard}')
             # sell!
-            total_qty, used_qty = get_coin_quantity(ticker)
+            total_qty, used_qty = get_balance_coin(ticker)
             quantity = total_qty - used_qty
             # ------------------------------------------
             r = sell(ticker, quantity, is_market=False)
@@ -375,7 +375,7 @@ def profit_sell(ticker: str) -> bool:
     """
     try:
         if is_in_market(ticker):
-            total_qty, used_qty = get_coin_quantity(ticker)
+            total_qty, used_qty = get_balance_coin(ticker)
             quantity = total_qty - used_qty
             # coin_yield = get_yield(ticker)
             if quantity > 0:
@@ -793,7 +793,7 @@ def trailing_stop(ticker: str) -> None:
                     mutation_db(m_sql, (current_price, current_yield, ticker))
                 else:
                     standard_prev_yield = prev_yield / 2
-                    total, used = get_coin_quantity(ticker)
+                    total, used = get_balance_coin(ticker)
                     qty = total - used
                     if prev_yield > 5.0 and current_yield <= standard_prev_yield:
                         log(f'{name} 차익실현 {current_yield:.3f} ')
@@ -804,7 +804,7 @@ def trailing_stop(ticker: str) -> None:
                         save_daily_profit_list(ticker, name, current_yield)
             else:
                 # 하락 반전: 마이너스 수익 기록중!
-                total, used = get_coin_quantity(ticker)
+                total, used = get_balance_coin(ticker)
                 qty = total - used
                 log(f'[알림] {name}({ticker}): 현재 가격이 돌파 목표가격 이하로 주저 앉음')
                 order_no = get_bought_order_no(ticker)

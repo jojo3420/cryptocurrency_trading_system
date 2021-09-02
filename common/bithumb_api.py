@@ -153,7 +153,7 @@ def buy_market_price(ticker: str, quantity: float) -> tuple:
         traceback.print_exc()
 
 
-def get_coin_quantity(ticker: str) -> tuple:
+def get_balance_coin(ticker: str) -> tuple:
     """
      코인 잔고 조회
     :param ticker: 코인티커
@@ -164,7 +164,7 @@ def get_coin_quantity(ticker: str) -> tuple:
             total_coin, used_coin, _krw_total, _krw_use = bithumb.get_balance(ticker)
             return total_coin, used_coin
     except Exception as e:
-        log(f'get_coin_quantity() 예외 발생:  {str(e)}')
+        log(f'get_balance_coin() 예외 발생:  {str(e)}')
         traceback.print_exc()
 
 
@@ -175,7 +175,7 @@ def sell_market_price(ticker: str, quantity: float) -> tuple:
     :return: 주문 정보
     """
     try:
-        coin_total, coin_use = get_coin_quantity(ticker)
+        coin_total, coin_use = get_balance_coin(ticker)
         order_coin_qty = coin_total - coin_use
         order_book: dict = bithumb.get_orderbook(ticker)
         bids: list = order_book['bids']
@@ -201,7 +201,7 @@ def sell_limit_price(ticker: str, price: int, quantity: float) -> tuple:
     :return: 주문번호
     """
     try:
-        coin_total, coin_use = get_coin_quantity(ticker)
+        coin_total, coin_use = get_balance_coin(ticker)
         order_coin_qty = coin_total - coin_use
         orderbook: dict = bithumb.get_orderbook(ticker)
         bids: list = orderbook['bids']

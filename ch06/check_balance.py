@@ -4,5 +4,5 @@ from common.bithumb_api import *
 
 print(bithumb.get_balance('DOGE'))
 
-quantity = get_coin_quantity('DOGE')
+quantity = get_balance_coin('DOGE')
 print(quantity)

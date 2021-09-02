@@ -12,7 +12,7 @@ from volatility_breakthrough_trading import *
         sell() 예외발생! e =>cannot unpack non-iterable NoneType object
 """
 # ticker = 'KLAY'
-# total_qty, used_qty = get_coin_quantity(ticker)
+# total_qty, used_qty = get_balance_coin(ticker)
 # sell(ticker, total_qty-used_qty)
 
 sell_all()
