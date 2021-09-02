@@ -1,6 +1,8 @@
+import time
+
 import pybithumb
 import math
-from common.bithumb_api import get_krw_balance, calc_buy_quantity, buy_limit_price
+from common.bithumb_api import get_krw_balance, calc_buy_quantity, buy_limit_price, get_balance_coin, cancel_order
 
 
 def read_keys(filepath):
@@ -26,8 +28,6 @@ def read_keys(filepath):
 total_krw, used_krw = get_krw_balance()
 csah = total_krw - used_krw
 print(f'cash: {csah:,.0f}')
-
-
 
 # buy bithumb
 # for idx, (symbol, yields) in enumerate(result):
@@ -60,15 +60,39 @@ print(f'cash: {csah:,.0f}')
 #             order_desc = buy_limit_price(ticker, price=buy_wish_price, quantity=qty)
 #             print(order_desc)
 
-ticker ='ONG'
-price = pybithumb.get_current_price(ticker)
-print(price, type(price))
-temp = {}
-temp[ticker] = price
-print(temp)
-prev_price = temp.get(ticker, 0)
-print(prev_price, type(prev_price))
+ticker = 'BTC'
 
-# qty = calc_buy_quantity(ticker) -1
-# order_d = buy_limit_price(ticker, price, qty)
-# print(order_d)
+order_book = pybithumb.get_orderbook(ticker, payment_currency='KRW')
+bids = order_book['bids']
+asks = order_book['asks']
+# print('매수호가:', bids)
+print('매수 호가')
+for i, bid_dict in enumerate(bids, start=1):
+    bid = bid_dict.get('price', 0)
+    print(f'{i} {bid:,}')
+print('-' * 100)
+# print('매도호가:', asks)
+print('매도 호가')
+for i, ask_dict in enumerate(asks, start=1):
+    ask = ask_dict.get('price', 0)
+    print(f'{i} {ask:,}')
+print('-' * 100)
+
+curr_price = pybithumb.get_current_price(ticker)
+print(f'현재시세: {curr_price:,}')
+
+qty = calc_buy_quantity(ticker, order_krw=50000, market="KRW")
+print(qty)
+order_desc = buy_limit_price(ticker, bids[0].get('price', 10000), qty)
+print(order_desc)
+
+time.sleep(3)
+
+btc_balance, _used = get_balance_coin(ticker)
+print(btc_balance)
+
+if btc_balance == 0.00001059:
+    r = cancel_order(order_desc)
+    print(f'매수 안됨.. 주문취소: {r}')
+
+

@@ -343,7 +343,7 @@ def check_loss_sell(ticker: str, basic_loss_ratio=2.0) -> bool:
         loss_standard = basic_loss_ratio + (1 - noise)
         loss_standard *= -1
         curr_yield: float = get_yield(ticker)
-        if curr_yield < loss_standard:
+        if curr_yield <= loss_standard:
             log(f'손절 => {ticker}, yield_rate:{curr_yield}%, noise_loss:{loss_standard}')
             # sell!
             total_qty, used_qty = get_balance_coin(ticker)
@@ -906,7 +906,7 @@ class CheckLossWorker(threading.Thread):
     def __init__(self):
         super().__init__()
         self.daemon = True
-        self.basic_loss_ratio = 2.0
+        self.basic_loss_ratio = 1.5  # 1.5 + noise
 
     def run(self):
         total_yields: float = get_total_yield()

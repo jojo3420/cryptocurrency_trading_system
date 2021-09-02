@@ -61,7 +61,7 @@ def get_krw_balance() -> tuple:
         return 0, 0
 
 
-def calc_buy_quantity(ticker: str, order_krw=None) -> float:
+def calc_buy_quantity(ticker: str, order_krw=None, order_btc=None, market="KRW") -> float:
     """
     매수 가능한 수량 계산(수수료 미고려)
     본인 계좌의 원화 잔고를 조회후 최우선 매도 호가금액을 조회후 매수할수 있는 갯수 계산
@@ -71,18 +71,36 @@ def calc_buy_quantity(ticker: str, order_krw=None) -> float:
     try:
         active_ticker: list = pybithumb.get_tickers()
         if ticker in active_ticker:
-            total_krw, use_krw = get_krw_balance()
-            if order_krw is None:
-                order_krw = total_krw - use_krw
-            # print(f'보유 원화: {total_krw:,}')
-            orderbook: dict = pybithumb.get_orderbook(ticker)
-            # 매도 호가
-            asks: list = orderbook['asks']
-            if (len(asks) > 0) and (order_krw > 0):
-                min_sell_price: float = asks[0]['price']
-                # print(min_sell_price)
-                quantity: float = order_krw / min_sell_price
-                return quantity
+            if market == 'KRW':
+                if order_krw is None:
+                    total_krw, use_krw = get_krw_balance()
+                    order_krw = total_krw - use_krw
+                # print(f'보유 원화: {total_krw:,}')
+                order_book: dict = pybithumb.get_orderbook(ticker)
+                # 매도 호가
+                asks: list = order_book.get('asks', [])
+                if asks and order_krw > 0:
+                    lower_sell_price: float = asks[0]['price']
+                    # print(min_sell_price)
+                    quantity: float = order_krw / lower_sell_price
+                    return quantity
+            elif market == 'BTC':
+                if order_btc is None:
+                    total_btc, used = get_balance_coin(market)
+                    order_btc = total_btc - used
+                order_book: dict = pybithumb.get_orderbook(ticker, payment_currency=market)
+                asks = order_book.get('asks', [])
+                if asks and order_btc > 0:
+                    lower_sell_price = asks[0]['price']
+                    quantity = order_btc / lower_sell_price
+                    return quantity
+            else:
+                raise ValueError('지원하지 않는 마켓입니다. => ', market)
+
+
+
+
+
     except Exception as e:
         log(f'calc_buy_quantity() 예외 발생:  {str(e)}')
         traceback.print_exc()
@@ -103,17 +121,17 @@ def buy_limit_price(ticker: str, price: float, quantity: float, market='KRW') ->
             # 지정가 주문
             total_krw, used_krw = get_krw_balance()
             cash = total_krw - used_krw
-            orderbook = pybithumb.get_orderbook(ticker, payment_currency=market)
-            asks = orderbook['asks']
+            order_book = pybithumb.get_orderbook(ticker, payment_currency=market)
+            asks = order_book['asks']
             if len(asks) > 0 and cash > 0:
                 ask_price = asks[0]['price']
                 possible_order_quantity = cash / ask_price
                 if possible_order_quantity >= quantity:
                     # 가격에 int() 제거
                     _integer_part, decimal_part = str(ask_price).split('.')
-                    if int(decimal_part) > 0:
-                        price = int(price)
-                    order_desc = bithumb.buy_limit_order(ticker, price, quantity)
+                    if int(decimal_part) == 0:
+                        price = int(float(price))
+                    order_desc = bithumb.buy_limit_order(ticker, price, quantity, payment_currency=market)
                     log(f'매도호가: {ask_price}, 진입가: {price}')
                     if type(order_desc) is dict and order_desc['status'] != '0000':
                         log(f'지정가 매수 주문 실패(api 실패): {order_desc}')
@@ -207,8 +225,10 @@ def sell_limit_price(ticker: str, price: int, quantity: float) -> tuple:
         bids: list = orderbook['bids']
         if bids and len(bids) > 0:
             if order_coin_qty >= quantity:
-                # if isinstance(price, int):
-                #     price = int(price)
+                bid = bids[0].get('price')
+                _integer_part, decimal_part = str(bid).split('.')
+                if int(decimal_part) == 0:
+                    price = int(float(price))
                 order = bithumb.sell_limit_order(ticker, price, quantity)
                 return order
             else:

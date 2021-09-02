@@ -9,9 +9,9 @@ def get_uptic_price(price, tic=1):
         price = str(price)
     if price.find('.') != -1:
         integer_str, decimal_str = price.split('.')
-        decimal_part = int(decimal_str) + tic
+        decimal_part = int(float(decimal_str)) + tic
         uptic_price = f'{integer_str}.{decimal_part}'
-        return uptic_price
+        return float(uptic_price)
 
 
 def get_downtic_price(price, tic=-1):
@@ -22,23 +22,24 @@ def get_downtic_price(price, tic=-1):
     :param tic: -1
     :return:
     """
-    if tic > 0:
-        tic = tic * -1
-    if not isinstance(price, str):
-        price = str(price)
-    if price.find('.') != -1:
-        integer_str, decimal_str = price.split('.')
-        decimal_part = int(decimal_str) + tic
-        if decimal_part < 0:
-            # TODO: 마이너스 틱 버그수정
-            print(decimal_part)
-            print(integer_str, decimal_str, tic)
-            integer_part = int(integer_str)
-            integer_part -= 1
-            decimal_part = int(decimal_str) + tic
-        else:
-            downtic_price = f'{integer_str}.{decimal_part}'
-            return downtic_price
+    pass
+    # if tic > 0:
+    #     tic = tic * -1
+    # if not isinstance(price, str):
+    #     price = str(price)
+    # if price.find('.') != -1:
+    #     integer_str, decimal_str = price.split('.')
+    #     decimal_part = int(decimal_str) + tic
+    #     if decimal_part < 0:
+    #         # TODO: 마이너스 틱 버그수정
+    #         print(decimal_part)
+    #         print(integer_str, decimal_str, tic)
+    #         integer_part = int(integer_str)
+    #         integer_part -= 1
+    #         decimal_part = int(decimal_str) + tic
+    #     else:
+    #         downtic_price = f'{integer_str}.{decimal_part}'
+    #         return float(downtic_price)
 
 
 if __name__ == '__main__':
