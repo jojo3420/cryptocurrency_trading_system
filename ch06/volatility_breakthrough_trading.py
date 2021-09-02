@@ -202,9 +202,9 @@ def buy_coin(ticker: str, buy_ratio: float, R: float = 0.5) -> bool or None:
                             telegram_bot.send_coin_bot(msg)
                             return True
                     elif order_desc and type(order_desc) is dict and order_desc['status'] != '0000':
-                        print(order_desc)
-                        print('지정가 매수 주문 실패. 시장가 매수 해야 함..')
-                        print(ticker, ask_price, buy_qty)
+                        log(order_desc)
+                        log('지정가 매수 주문 실패')
+                        log(ticker, ask_price, buy_qty)
                     else:
                         log(f'{ticker} 매수 실패 주문 결과 확인: {order_desc}')
                         is_cancel: bool = bithumb.cancel_order(order_desc)

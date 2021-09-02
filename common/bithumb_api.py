@@ -110,11 +110,12 @@ def buy_limit_price(ticker: str, price: float, quantity: float, market='KRW') ->
                 possible_order_quantity = cash / ask_price
                 if possible_order_quantity >= quantity:
                     # 가격에 int() 제거
-                    if str(ask_price).find('.') > -1:
-                        print(price, type(price))
-                    else:
+                    _integer_part, decimal_part = str(ask_price).split('.')
+                    decimal_part = int(decimal_part)
+                    if decimal_part > 0:
                         price = int(price)
                     order_desc = bithumb.buy_limit_order(ticker, price, quantity)
+                    log(f'매도호가: {ask_price}, 진입가: {price}')
                     if type(order_desc) is dict and order_desc['status'] != '0000':
                         log(f'지정가 매수 주문 실패(api 실패): {order_desc}')
                     return order_desc
@@ -124,7 +125,7 @@ def buy_limit_price(ticker: str, price: float, quantity: float, market='KRW') ->
                     return None
             else:
                 log('주문 호가가 존재하지 않거나 캐쉬가 충분하지 않습니다.')
-                print(asks, cash)
+                log(asks, cash)
 
     except Exception as e:
         log(f'buy_limit_price() 예외 발생:  {str(e)}')
