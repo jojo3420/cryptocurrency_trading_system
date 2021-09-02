@@ -111,8 +111,7 @@ def buy_limit_price(ticker: str, price: float, quantity: float, market='KRW') ->
                 if possible_order_quantity >= quantity:
                     # 가격에 int() 제거
                     _integer_part, decimal_part = str(ask_price).split('.')
-                    decimal_part = int(decimal_part)
-                    if decimal_part > 0:
+                    if int(decimal_part) > 0:
                         price = int(price)
                     order_desc = bithumb.buy_limit_order(ticker, price, quantity)
                     log(f'매도호가: {ask_price}, 진입가: {price}')
