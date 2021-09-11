@@ -5,12 +5,15 @@ def get_uptic_price(price, tic=1):
     :param tic: 1
     :return:
     """
-    if not isinstance(price, str):
-        price = str(price)
+    price = format(price, '.8f')
     if price.find('.') != -1:
         integer_str, decimal_str = price.split('.')
+        middle_decimal_str = ''
+        for n in decimal_str:
+            if n == '0':
+                middle_decimal_str += n
         decimal_part = int(float(decimal_str)) + tic
-        uptic_price = f'{integer_str}.{decimal_part}'
+        uptic_price = f'{integer_str}.{middle_decimal_str}{decimal_part}'
         return float(uptic_price)
 
 
@@ -22,24 +25,23 @@ def get_downtic_price(price, tic=-1):
     :param tic: -1
     :return:
     """
-    pass
-    # if tic > 0:
-    #     tic = tic * -1
-    # if not isinstance(price, str):
-    #     price = str(price)
-    # if price.find('.') != -1:
-    #     integer_str, decimal_str = price.split('.')
-    #     decimal_part = int(decimal_str) + tic
-    #     if decimal_part < 0:
-    #         # TODO: 마이너스 틱 버그수정
-    #         print(decimal_part)
-    #         print(integer_str, decimal_str, tic)
-    #         integer_part = int(integer_str)
-    #         integer_part -= 1
-    #         decimal_part = int(decimal_str) + tic
-    #     else:
-    #         downtic_price = f'{integer_str}.{decimal_part}'
-    #         return float(downtic_price)
+    price = format(price, '.8f')
+    if price.find('.') != -1:
+        integer_str, decimal_str = price.split('.')
+        middle_decimal_str = ''
+        for n in decimal_str:
+            if n == '0':
+                middle_decimal_str += n
+            else:
+                break
+
+        decimal_part = int(float(decimal_str)) + tic
+        if decimal_part == -1:
+            integer_part = int(integer_str) + tic
+            uptic_price = f'{integer_part}.0'
+        else:
+            uptic_price = f'{integer_str}.{middle_decimal_str}{decimal_part}'
+        return float(uptic_price)
 
 
 if __name__ == '__main__':
@@ -49,8 +51,17 @@ if __name__ == '__main__':
     # print(uptic_price)
     # print(downtic_price)
 
-    price = '123.5'
-    uptic_price = get_uptic_price(price, 15)
-    downtic_price = get_downtic_price(price, -15)
-    print(uptic_price)
-    print(downtic_price)
+    # price = '123.5'
+    # uptic_price = get_uptic_price(price, 15)
+    # downtic_price = get_downtic_price(price, -15)
+    # print(uptic_price)
+    # print(downtic_price)
+
+    """
+    BTC 마켓에서 COMP 코인 매수하기
+[2021-09-06 22:45:35.558979] 매도호가: 0.01069999, 진입가: 0.9272440
+    """
+    bid_price = 0.00008769
+    # tic_price = get_uptic_price(bid_price)
+    tic_price = get_downtic_price(bid_price)
+    print(format(bid_price, '.8f'), format(tic_price, '.8f'))

@@ -12,7 +12,7 @@ from common.bithumb_api import *
 from common.utils import *
 
 
-def save_bought_list(order_desc: tuple) -> None:
+def save_bought_list(order_desc: tuple, type='bk') -> None:
     """
       매수한 목록 DB 저장
       :param order_desc = 코인티커, 가격, 수량
@@ -29,7 +29,7 @@ def save_bought_list(order_desc: tuple) -> None:
         sql = f"INSERT INTO coin_bought_list " \
               f" (order_no, date, ticker, type, is_sell)" \
               f" VALUES (%s, %s, %s, %s, %s) "
-        mutation_db(sql, (order_no, get_today_format(), ticker, 'bk', False))
+        mutation_db(sql, (order_no, get_today_format(), ticker, type, False))
 
         is_bull = is_bull_coin(ticker)
         if is_bull is True:
@@ -513,7 +513,6 @@ def get_coin_bought_list() -> list:
             return [tup[0] for tup in tickers_tup]
         elif isinstance(tickers_tup, tuple) and len(tickers_tup) == 0:
             return []
-
 
 
 def get_total_yield() -> float:
