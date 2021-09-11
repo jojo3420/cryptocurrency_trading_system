@@ -626,36 +626,32 @@ def buy_or_cancel_btc_market(ticker, quantity, delay=3, is_uptic=False, loop_cnt
     btc_curr_price = pybithumb.get_current_price(market)
     for end_idx in range(len(asks) - 1, -1, -1):
         print(
-            f'{end_idx} {asks[end_idx].get("price"):.8f}, {asks[end_idx].get("price") * btc_curr_price:,.0f}, {format(asks[end_idx].get("quantity"), "f")}')
+            f'{end_idx} {asks[end_idx].get("price"):.8f}BTC, {asks[end_idx].get("price") * btc_curr_price:,.0f}KRW, {format(asks[end_idx].get("quantity"), "f")}개')
 
     print('매수 호가')
     for st_idx, bid in enumerate(bids, 1):
         # print(bid)
         print(
-            f'{st_idx} {bid.get("price"):.8f}, {bid.get("price") * btc_curr_price:,.0f}, {format(bid.get("quantity"), "f")}')
-    print('-' * 100)
-
+            f'{st_idx} {bid.get("price"):.8f}BTC, {bid.get("price") * btc_curr_price:,.0f}KRW, {format(bid.get("quantity"), "f")}개')
     bid_price = bids[0]['price']
-    print(f'bid_price: {bid_price}')
+    print(f'bid_price: {format(bid_price, ".8f")}')
     if is_uptic:
         bid_price = get_uptic_price(bid_price)
-        print(f'after: {bid_price}')
+        print(f'after: {format(bid_price, ".8f")}')
     before_coin_balance, _used = get_balance_coin(ticker)
-
+    print(f'진입 BTC: {format(quantity * bid_price, ".8f")}')
     order_desc = buy_limit_price(ticker, bid_price, quantity, market=market)
-    print(order_desc)
-
+    print(f'order_desc: {order_desc}')
     time.sleep(delay)
-
     coin_balance, used = get_balance_coin(ticker)
     coin_balance -= used
-
     if coin_balance == before_coin_balance:
         print('매수주문 체결 안됨. 취소 주문진행!')
         cancel = cancel_order(order_desc)
         print(f'cancel: {cancel}')
-        time.sleep(1)
-        return buy_or_cancel_btc_market(ticker, quantity, delay=delay, is_uptic=is_uptic, loop_cnt=loop_cnt + 1)
+        print('-' * 100)
+        if cancel is True:
+            return buy_or_cancel_btc_market(ticker, quantity, delay=delay, is_uptic=is_uptic, loop_cnt=loop_cnt + 1)
     elif coin_balance > before_coin_balance:
         total_qty, _used = get_balance_coin(ticker)
         print('매수성공!', total_qty)

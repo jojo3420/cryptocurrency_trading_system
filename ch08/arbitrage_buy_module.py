@@ -66,14 +66,19 @@ async def main():
 
 def restfull_buy_main():
     while True:
-        tickers = pybithumb.get_tickers(payment_currency=BTC_TICKER)
-        for ticker in tickers:
-            # print(ticker)
-            symbol = f'{ticker}_BTC'
-            btc_curr_price = pybithumb.get_current_price(ticker, payment_currency='BTC')
-            print(symbol, btc_curr_price)
-            analysis_transaction(symbol, btc_curr_price)
-            time.sleep(1)
+        try:
+            tickers = pybithumb.get_tickers(payment_currency=BTC_TICKER)
+            for ticker in tickers:
+                # print(ticker)
+                symbol = f'{ticker}_BTC'
+                btc_curr_price = pybithumb.get_current_price(ticker, payment_currency='BTC')
+                print(symbol, btc_curr_price)
+                analysis_transaction(symbol, btc_curr_price)
+                time.sleep(1)
+        except Exception as e:
+            print(str(e))
+            traceback.print_exc()
+            time.sleep(3)
 
 
 def analysis_transaction(symbol: str, btc_market_contract_price: float):
@@ -86,7 +91,7 @@ def analysis_transaction(symbol: str, btc_market_contract_price: float):
     type = 'arbt'
     btc_balance, used = get_balance_coin(BTC_TICKER)
     btc_balance = (btc_balance - used) - 0.00001059
-    btc_qty = round(btc_balance / 2, 8)
+    btc_qty = round(btc_balance, 8)
     ticker, payment_currency = symbol.split('_')
     # print(ticker)
 
@@ -98,8 +103,7 @@ def analysis_transaction(symbol: str, btc_market_contract_price: float):
     else:
         print(f'원화 환산: {btc_converted_krw_price:,.2f} 원화 가격: {krw_market_curr_price:,.2f}')
         diff_percent = (krw_market_curr_price / btc_converted_krw_price - 1) * 100
-        print(round(diff_percent, 2))
-        print('-' * 80)
+        print(f'{round(diff_percent, 2)}%')
         if diff_percent >= 4:
             # BTC 마켓에서 매수후 원화로 팔기
             print('차이 갭 발생!', ticker)
@@ -109,7 +113,7 @@ def analysis_transaction(symbol: str, btc_market_contract_price: float):
             if btc_qty > 0:
                 qty = calc_buy_quantity(ticker, order_btc=btc_qty, market=payment_currency)
                 print(f'qty: {qty}')
-                qty = round(qty / 2, 4)
+                qty = round(qty / 1, 4)
                 print(f'after qty: {qty}')
                 entry_price, order_desc = buy_or_cancel_btc_market(ticker, qty, delay=5, is_uptic=True)
                 if entry_price and order_desc:
@@ -123,12 +127,13 @@ def analysis_transaction(symbol: str, btc_market_contract_price: float):
                     save_transaction_history(params)
         elif diff_percent <= -5:
             print('원화로 매수후 비트코인 마켓에서 코인 매도')
-            total_cash, used = get_krw_balance()
-            cash = total_cash - used
-            print(cash, cash / 2)
+            # total_cash, used = get_krw_balance()
+            # cash = total_cash - used
+            # print(cash, cash / 2)
             # entry_price, order_desc = buy_or_cancel_krw_market(ticker, position_size_cash=cash/2,
             #                                                is_uptic=True)
             # print(f'entry_price: {entry_price}, order_desc: {order_desc}')
+        print('-' * 80)
 
 
 def save_transaction_history(params: tuple) -> None:
