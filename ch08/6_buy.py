@@ -20,9 +20,9 @@ current_krw_xrp_price = pyupbit.get_current_price(ticker)
 print(f'리플 원화 현재가: {current_krw_xrp_price:,.0f}')
 
 # 지정가 매수
-quantity = 1
-ret = api.buy_limit_order(ticker, current_krw_xrp_price, volume=quantity)
-# print('매수결과: ', ret)
+quantity = 5
+ret = api.buy_limit_order(ticker, current_krw_xrp_price - 200, volume=quantity)
+print('매수결과: ', ret)
 # 매수결과:  {'error': {'message': '최소주문금액 이상으로 주문해주세요', 'name': 'under_min_total_bid'}}
 # https://docs.upbit.com/docs/api-%EC%A3%BC%EC%9A%94-%EC%97%90%EB%9F%AC-%EC%BD%94%EB%93%9C-%EB%AA%A9%EB%A1%9D
 # => 리플의 현재 최소 주문금액은 5000 krw 임

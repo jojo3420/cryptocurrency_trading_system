@@ -74,7 +74,9 @@ def calc_buy_quantity(ticker: str, order_krw=None, order_btc=None, market="KRW")
             if market == 'KRW':
                 if order_krw is None:
                     total_krw, use_krw = get_krw_balance()
-                    order_krw = total_krw - use_krw
+                    order_krw = total_krw - use_krw - 5000
+                else:
+                    order_krw -= 5000
                 # print(f'보유 원화: {total_krw:,}')
                 order_book: dict = pybithumb.get_orderbook(ticker)
                 # 매도 호가
@@ -83,7 +85,7 @@ def calc_buy_quantity(ticker: str, order_krw=None, order_btc=None, market="KRW")
                     lower_sell_price: float = asks[0]['price']
                     # print(min_sell_price)
                     quantity: float = order_krw / lower_sell_price
-                    return quantity
+                    return round(quantity, 7)
             elif market == 'BTC':
                 if order_btc is None:
                     total_btc, used = get_balance_coin(market)
@@ -93,7 +95,7 @@ def calc_buy_quantity(ticker: str, order_krw=None, order_btc=None, market="KRW")
                 if asks and order_btc > 0:
                     lower_sell_price = asks[0]['price']
                     quantity = order_btc / lower_sell_price
-                    return quantity
+                    return round(quantity, 7)
             else:
                 raise ValueError('지원하지 않는 마켓입니다. => ', market)
 
@@ -253,7 +255,7 @@ def sell_limit_price(ticker: str, price: int, quantity: float) -> tuple:
                 if int(decimal_part) == 0:
                     price = int(float(price))
                 log(f'시장매도호가: {asks[0].get("price")}, 시장매수호가: {bid}')
-                log(f'나의 매도 주문가: {price:,.8f} {price}')
+                log(f'나의 매도 주문가: {price:,.8f} 수량: {quantity}')
                 order = bithumb.sell_limit_order(ticker, price, quantity)
                 return order
             else:
@@ -636,7 +638,7 @@ def buy_or_cancel_btc_market(ticker, quantity, delay=3, is_uptic=False, loop_cnt
     bid_price = bids[0]['price']
     print(f'bid_price: {format(bid_price, ".8f")}')
     if is_uptic:
-        bid_price = get_uptic_price(bid_price)
+        bid_price = get_uptic_price(bid_price, 1)
         print(f'after: {format(bid_price, ".8f")}')
     before_coin_balance, _used = get_balance_coin(ticker)
     print(f'진입 BTC: {format(quantity * bid_price, ".8f")}')
@@ -682,7 +684,6 @@ def buy_or_cancel_krw_market(ticker, position_size_cash, delay=3, is_uptic=False
         for start_idx, bid_dict in enumerate(bids, start=1):
             bid = bid_dict.get('price', 0)
             print(f'{start_idx} {bid:,}')
-        print('-' * 100)
         print('매도 호가')
         for start_idx, ask_dict in enumerate(asks, start=1):
             ask = ask_dict.get('price', 0)
@@ -696,21 +697,23 @@ def buy_or_cancel_krw_market(ticker, position_size_cash, delay=3, is_uptic=False
         entry_price = bids[0].get('price', 10000)
         if is_uptic:
             entry_price = get_uptic_price(entry_price)
-
+        print(f'진압가: {entry_price:,.8f}')
         order_desc = buy_limit_price(ticker, entry_price, qty)
         print(f'매수 주문 결과: {order_desc}')
         time.sleep(delay)
         total_coin_balance, _used = get_balance_coin(ticker)
         print(f'매수주문후 잔고: {total_coin_balance}')
-
         if before_coin_balance == total_coin_balance:
             r = cancel_order(order_desc)
             print(f'매수 체결 안됨.. 주문취소: {r}')
             if r:
+                print('-' * 100)
                 return buy_or_cancel_krw_market(ticker, position_size_cash, delay=delay, loop_cnt=loop_cnt + 1)
         else:
             print(f'주문 성공=> 이전수량: {before_coin_balance} 요청수량: {qty} : 현재수량:{total_coin_balance}')
+            print('-' * 100)
             return entry_price, order_desc
+
 
 
 if __name__ == '__main__':
