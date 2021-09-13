@@ -14,7 +14,6 @@ if os.name == 'nt':
 else:
     sys.path.append('/Users/maegmini/Code/sourcetree-git/python/cryptocurrency_trading_system')
 
-
 ymd_format = '%Y-%m-%d'
 
 
@@ -444,6 +443,21 @@ def save_bull_coin(bull_tickers: list) -> None:
         # ratio = 0.03
         rows.append((today, ticker, get_coin_name(ticker), position_size))
     mutation_many(sql, rows)
+
+
+def save_transaction_history_data(params: tuple):
+    """
+     주문 거래 내역 저장하기 DB
+     """
+    try:
+        sql = 'INSERT INTO coin_transaction_history ' \
+              ' (order_no, date, ticker, position, price, ' \
+              ' quantity, fee, transaction_krw_amount, type)' \
+              ' VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)'
+        mutation_db(sql, params)
+    except Exception as e:
+        log(f' save_transaction_history() 예외발생.. 매수실패 {str(e)}')
+        traceback.print_exc()
 
 
 if __name__ == '__main__':

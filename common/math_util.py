@@ -49,7 +49,17 @@ def get_downtic_price(price: float, tic=-1):
 
 if __name__ == '__main__':
     # bid_price = 0.00008769
-    bid_price = 0.00005410
-    tic_price = get_uptic_price(bid_price)
-    # tic_price = get_downtic_price(bid_price)
-    print(format(bid_price, '.8f'), format(tic_price, '.8f'))
+    # bid_price = 0.00005410
+    # bid_price = 0.00005413
+    # tic_price_0 = get_uptic_price(bid_price, 0)
+    # tic_price_1 = get_uptic_price(bid_price, 1)
+    # tic_price_2 = get_uptic_price(bid_price, 2)
+    # tic_price_3 = get_uptic_price(bid_price, 3)
+    # print(format(bid_price, '.8f'), format(tic_price_0, '.8f'))
+    # print(format(bid_price, '.8f'), format(tic_price_1, '.8f'))
+    # print(format(bid_price, '.8f'), format(tic_price_2, '.8f'))
+    # print(format(bid_price, '.8f'), format(tic_price_3, '.8f'))
+
+    ask_price = 5.96900
+    downtic_price = get_downtic_price(ask_price, -1)
+    print(f'{ask_price:,.8f}, {downtic_price:,.8f}')
