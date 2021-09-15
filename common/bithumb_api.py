@@ -690,30 +690,35 @@ def buy_or_cancel_krw_market(ticker, position_size_cash, delay=3, is_uptic=False
             print(f'{start_idx} {ask:,}')
         print('-' * 100)
         curr_price = pybithumb.get_current_price(ticker)
-        print(f'현재시세: {curr_price:,}')
-        qty = calc_buy_quantity(ticker, order_krw=position_size_cash, market="KRW")
-        print(f'매수 수량: {qty}')
-        before_coin_balance, _used_coin = get_balance_coin(ticker)
-        entry_price = bids[0].get('price', 10000)
-        if is_uptic:
-            entry_price = get_uptic_price(entry_price)
-        print(f'진압가: {entry_price:,.8f}')
-        order_desc = buy_limit_price(ticker, entry_price, qty)
-        print(f'매수 주문 결과: {order_desc}')
-        time.sleep(delay)
-        total_coin_balance, _used = get_balance_coin(ticker)
-        print(f'매수주문후 잔고: {total_coin_balance}')
-        if before_coin_balance == total_coin_balance:
-            r = cancel_order(order_desc)
-            print(f'매수 체결 안됨.. 주문취소: {r}')
-            if r:
-                print('-' * 100)
-                return buy_or_cancel_krw_market(ticker, position_size_cash, delay=delay, loop_cnt=loop_cnt + 1)
+        if curr_price > cash:
+            print(f'현재 보유원화로 1개도 매수할수 없습니다. 현재시세: {curr_price:,} 원화: {cash:,} ')
+            return 0, ()
         else:
-            print(f'주문 성공=> 이전수량: {before_coin_balance} 요청수량: {qty} : 현재수량:{total_coin_balance}')
-            print('-' * 100)
-            return entry_price, order_desc
-
+            qty = calc_buy_quantity(ticker, order_krw=position_size_cash, market="KRW")
+            print(f'매수 수량: {qty}')
+            before_coin_balance, _used_coin = get_balance_coin(ticker)
+            entry_price = bids[0].get('price', 0)
+            if entry_price and is_uptic:
+                entry_price = int(get_uptic_price(entry_price))
+            print(f'진압가: {entry_price:,.8f}')
+            order_desc = buy_limit_price(ticker, entry_price, qty)
+            print(f'매수 주문 결과: {order_desc}')
+            time.sleep(delay)
+            total_coin_balance, _used = get_balance_coin(ticker)
+            print(f'매수주문후 잔고: {total_coin_balance}')
+            if before_coin_balance == total_coin_balance:
+                r = cancel_order(order_desc)
+                print(f'매수 체결 안됨.. 주문취소: {r}')
+                if r:
+                    print('-' * 100)
+                    return buy_or_cancel_krw_market(ticker, position_size_cash, delay=delay, loop_cnt=loop_cnt + 1)
+            else:
+                print(f'주문 성공=> 이전수량: {before_coin_balance} 요청수량: {qty} : 현재수량:{total_coin_balance}')
+                print('-' * 100)
+                return entry_price, order_desc
+    else:
+        print(f'cash 부족 => {cash}')
+        return 0, ()
 
 
 if __name__ == '__main__':

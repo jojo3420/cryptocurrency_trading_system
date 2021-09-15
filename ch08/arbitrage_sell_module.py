@@ -75,9 +75,7 @@ def restfull_sell_main():
             # print(balance)
             for ticker, (total_coin, used, available) in balance.items():
                 # print(ticker, total_coin, used, available)
-                if ticker == 'BTC' or ticker == 'ETH':
-                    continue
-                else:
+                if ticker not in ['BTC', 'ETH']:
                     print(f'sell: {ticker} {available}')
                     sell_and_cancel_krw_market(ticker, available)
                 time.sleep(0.3)

@@ -69,15 +69,15 @@ def restfull_buy_main():
             # BTC 풀매수
             total_krw, used = get_krw_balance()
             krw = total_krw - used
-            if krw >= 100000:
-                print(f'원화 잔고: {krw:,.0f}')
-                order_book = pybithumb.get_orderbook(BTC_TICKER)
-                bids = order_book.get('bids', [])
-                bid = bids[0].get('price', 0)
-                quantity = calc_buy_quantity(BTC_TICKER, krw)
-                print(f'qty: {quantity}')
-                order_desc = buy_limit_price('BTC', bid, quantity)
-                print(f'BTC 매수주문결과: {order_desc}')
+            # if krw >= 200000:
+            #     print(f'원화 잔고: {krw:,.0f}')
+            #     order_book = pybithumb.get_orderbook(BTC_TICKER)
+            #     bids = order_book.get('bids', [])
+            #     bid = bids[0].get('price', 0)
+            #     quantity = calc_buy_quantity(BTC_TICKER, krw)
+            #     print(f'qty: {quantity}')
+            #     order_desc = buy_limit_price('BTC', bid, quantity)
+            #     print(f'BTC 매수주문결과: {order_desc}')
 
             tickers = pybithumb.get_tickers(payment_currency=BTC_TICKER)
             for ticker in tickers:
@@ -124,7 +124,7 @@ def analysis_transaction(symbol: str, btc_market_contract_price: float):
         print(f'{round(diff_percent, 2)}%')
         if diff_percent >= 7:
             # BTC 마켓에서 매수후 원화로 팔기
-            print('차이 갭 발생!', ticker)
+            print(f'BTC 마켓에서 매수후 원화로 팔기! {ticker}')
             # 매수 호가, 매수호가 1단계 위, 매수호가 2단계 위 => 3건 매수 건다.
             if btc_qty > 0:
                 qty = calc_buy_quantity(ticker, order_btc=btc_qty, market=payment_currency)
@@ -158,7 +158,7 @@ def analysis_transaction(symbol: str, btc_market_contract_price: float):
                         print(f'BTC잔고: {format(btc_qty, ".8f")}')
 
         elif diff_percent <= -7:
-            print('원화로 매수후 비트코인 마켓에서 코인 매도')
+            print(f'원화로 매수후 비트코인 마켓에서 코인 매도 {ticker}')
             total_cash, used = get_krw_balance()
             krw_size = total_cash - used
             qty = calc_buy_quantity(ticker, order_krw=krw_size)

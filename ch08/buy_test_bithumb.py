@@ -26,5 +26,5 @@ def read_keys(filepath):
 
 
 if __name__ == '__main__':
-    r, order_desc = buy_or_cancel_krw_market('XRP', 5000, 1)
-    print(r, order_desc)
+    entry_price, order_desc = buy_or_cancel_krw_market('BAL', 60000)
+    print(entry_price, order_desc)
