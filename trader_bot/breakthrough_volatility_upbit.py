@@ -2,13 +2,15 @@ import traceback
 
 from common.telegram_bot import send_coin_bot, system_log
 from math_helper import *
-from upbit_helper import *
+# from upbit_helper import *
+from vol_strategy import *
 from datetime import datetime
 import time
 from common.utils import log
 
 if __name__ == '__main__':
     try:
+
         # setup()
         # basic_loss_ratio = 2.0  # 기본 손절선
         while True:
