@@ -130,8 +130,7 @@ def buy_limit_price(ticker: str, entry_price: float, quantity: float, market='KR
                     ask_price = asks[0]['price']
                     possible_order_quantity = cash / entry_price
                     if possible_order_quantity >= quantity:
-                        # 가격에 int() 제거
-                        _integer_part, decimal_part = str(entry_price).split('.')
+                        _integer_part, decimal_part = str(float(entry_price)).split('.')
                         if int(decimal_part) == 0:
                             entry_price = int(float(entry_price))
                         order_desc = bithumb.buy_limit_order(ticker, entry_price, quantity, payment_currency=market)
@@ -162,12 +161,9 @@ def buy_limit_price(ticker: str, entry_price: float, quantity: float, market='KR
                         log('주문가능 수량보다 더 많은 수량을 주문했습니다.')
                         log(f'주문요구수량: {quantity}, 주문가능수량: {qty} ')
                         return None
-
-
-
-
-
-
+        else:
+            log(f'{ticker} 가 매수할수 있는 종류의 마켓{market}에 없습니다.')
+            return None
     except Exception as e:
         log(f'buy_limit_price() 예외 발생:  {str(e)}')
         traceback.print_exc()
