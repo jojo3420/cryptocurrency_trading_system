@@ -21,7 +21,7 @@ def save_bought_list(order_desc: tuple, type='bk') -> None:
 
     """
     try:
-        if type(order_desc) is dict:
+        if isinstance(order_desc, dict):
             print('매수 예외발생 =>', order_desc)
             return
         # print(order_desc)
@@ -339,9 +339,7 @@ def check_loss_sell(ticker: str, basic_loss_ratio=2.0) -> bool:
     :return:
     """
     try:
-        noise = get_current_noise(ticker)
-        loss_standard = basic_loss_ratio + (1 - noise)
-        loss_standard *= -1
+        loss_standard = basic_loss_ratio * -1
         curr_yield: float = get_yield(ticker)
         if curr_yield <= loss_standard:
             log(f'손절 => {ticker}, yield_rate:{curr_yield}%, noise_loss:{loss_standard}')
@@ -993,7 +991,7 @@ def setup() -> None:
 
 if __name__ == '__main__':
     FindBullCoinWorker().start()
-    CheckLossWorker().start()
+    # CheckLossWorker().start()
     try:
         setup()
         basic_loss_ratio = 2.0  # 기본 손절선
@@ -1025,6 +1023,12 @@ if __name__ == '__main__':
                 if r is True and len(get_coin_bought_list()) == 0:
                     end_sell_tm = datetime.now()
                     start_trading_tm = datetime.now()
+
+            for ticker in get_coin_bought_list():
+                check_loss_sell(ticker, basic_loss_ratio)
+                time.sleep(0.1)
+                trailing_stop(ticker)
+                time.sleep(0.1)
 
             if start_trading_tm < now_tm < end_trading_tm:
                 # 매수하기 - 변동성 돌파
