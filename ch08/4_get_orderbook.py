@@ -4,8 +4,8 @@ import pyupbit
 ticker = 'KRW-XRP'
 
 orderbook: list = pyupbit.get_orderbook(ticker)
-# print(orderbook)
-bids_asks = orderbook[0]['orderbook_units']
+print(orderbook)
+bids_asks = orderbook[0].get('orderbook_units', [])
 print('호가창 갯수: ', len(bids_asks))  # 매수호가 15, 매도호가 15개
 asks = []
 bids = []
