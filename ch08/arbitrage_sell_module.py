@@ -37,7 +37,7 @@ def sell_and_cancel_krw_market(ticker: str, qty: float):
             print(f'down_tic(KRW): {downtic_price:,.8f}')
             # 현재시세(KRW): 5.96900000 down_tic(KRW): 5.96899999 => 주문틱이 있음
             print(f'매도호가(KRW): {ask_price:,.8f}')
-            order_desc = sell_limit_price(ticker, ask_price, qty)
+            order_desc = sell_limit_price(ticker, curr_krw_price, qty)
             print(f'매도 주문결과: {order_desc}')
             time.sleep(3)
             after_qty, _ = get_balance_coin(ticker)

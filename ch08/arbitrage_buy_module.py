@@ -159,21 +159,21 @@ def analysis_transaction(symbol: str, btc_market_contract_price: float):
 
         elif diff_percent <= -7:
             print(f'원화로 매수후 비트코인 마켓에서 코인 매도 {ticker}')
-            total_cash, used = get_krw_balance()
-            krw_size = total_cash - used
-            qty = calc_buy_quantity(ticker, order_krw=krw_size)
-            entry_price, order_desc = buy_or_cancel_krw_market(ticker, position_size_cash=krw_size, is_uptic=True)
-            print(f'원화 매수 => entry_price: {entry_price}, order_desc: {order_desc}')
-            if entry_price and order_desc:
-                #  ' (order_no, date, ticker, position, price, ' \
-                #  'quantity, fee, transaction_krw_amount, type)' \
-                fee = round(entry_price * qty * 0.0025, 3)
-                params = (
-                    order_desc[2], get_today_format(), ticker, 'bid', entry_price,
-                    qty, fee, btc_converted_krw_price, type)
-                save_transaction_history_data(params)
-            else:
-                print(f'krw 매수주문 실패 {ticker}')
+            # total_cash, used = get_krw_balance()
+            # krw_size = total_cash - used
+            # qty = calc_buy_quantity(ticker, order_krw=krw_size)
+            # entry_price, order_desc = buy_or_cancel_krw_market(ticker, position_size_cash=krw_size, is_uptic=True)
+            # print(f'원화 매수 => entry_price: {entry_price}, order_desc: {order_desc}')
+            # if entry_price and order_desc:
+            #     #  ' (order_no, date, ticker, position, price, ' \
+            #     #  'quantity, fee, transaction_krw_amount, type)' \
+            #     fee = round(entry_price * qty * 0.0025, 3)
+            #     params = (
+            #         order_desc[2], get_today_format(), ticker, 'bid', entry_price,
+            #         qty, fee, btc_converted_krw_price, type)
+            #     save_transaction_history_data(params)
+            # else:
+            #     print(f'krw 매수주문 실패 {ticker}')
 
         print('-' * 80)
 
