@@ -499,6 +499,9 @@ def calc_fix_noise_ma_by(ticker: str, days: int = 30) -> float:
     :return:
     """
     try:
+        if '-' in ticker:
+            return
+        print('calc_fix_noise_ma_by: ', ticker)
         prices: DataFrame = pybithumb.get_candlestick(ticker)
         if type(prices) is not None and not prices.empty:
             # print(prices.tail(10))
@@ -740,6 +743,7 @@ if __name__ == '__main__':
     # print(get_my_coin_balance())
     # print(calc_fix_noise_ma_by('BTC', 5))
 
-    _balance = bithumb.get_balance('ENJ')
-    print(_balance)
-    print(calc_target_volatility_ratio('ENJ'))
+    # _balance = bithumb.get_balance('ENJ')
+    # print(_balance)
+    # print(calc_target_volatility_ratio('ENJ'))
+    print(pybithumb.get_candlestick('ETH'))

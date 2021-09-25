@@ -454,8 +454,9 @@ def get_buy_wish_list() -> tuple:
         sql = 'SELECT ticker, ratio, R ' \
               ' FROM coin_buy_wish_list ' \
               ' WHERE is_active = %s ' \
-              ' AND is_loss_sell = %s '
-        _buy_wish_list: tuple = select_db(sql, (True, False))  # 0.55)
+              ' AND is_loss_sell = %s ' \
+              ' AND type != %s'
+        _buy_wish_list: tuple = select_db(sql, (True, False, 'upbit'))  # 0.55)
         _coin_buy_wish_list = []
         _coin_ratio_list = []
         _coin_r_list = []
