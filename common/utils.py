@@ -35,9 +35,13 @@ def create_conn(filepath: str) -> 'conn':
 
 
 def log(msg, *args, **kwargs) -> None:
-    now_tm = datetime.now()
-    if args or kwargs:
+    now_tm = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    if args and kwargs:
         print(f'[{now_tm}] {msg} {args} {kwargs}')
+    elif args:
+        print(f'[{now_tm}] {msg} {args}')
+    elif kwargs:
+        print(f'[{now_tm}] {msg} {kwargs}')
     else:
         print(f'[{now_tm}] {msg}')
 
@@ -180,7 +184,9 @@ def calc_prev_volatility(ticker: str) -> float:
     :param ticker: 코인티커
        (당일고가 - 당일저가) / 시가  * 100
     """
+    print(f'ticker: {ticker}')
     prices: 'df' = pybithumb.get_candlestick(ticker)
+    print(prices)
     if not prices.empty:
         row = prices.iloc[-2]
         open, high, low, close, volume = tuple(row)

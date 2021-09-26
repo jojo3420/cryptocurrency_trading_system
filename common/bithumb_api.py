@@ -61,7 +61,7 @@ def get_krw_balance() -> tuple:
         return 0, 0
 
 
-def calc_buy_quantity(ticker: str, order_krw=None, order_btc=None, market="KRW") -> float:
+def calc_total_buy_quantity(ticker: str, order_krw=None, order_btc=None, market="KRW") -> float:
     """
     매수 가능한 수량 계산(수수료 미고려)
     본인 계좌의 원화 잔고를 조회후 최우선 매도 호가금액을 조회후 매수할수 있는 갯수 계산
@@ -104,7 +104,7 @@ def calc_buy_quantity(ticker: str, order_krw=None, order_btc=None, market="KRW")
 
 
     except Exception as e:
-        log(f'calc_buy_quantity() 예외 발생:  {str(e)}')
+        log(f'calc_total_buy_quantity() 예외 발생:  {str(e)}')
         traceback.print_exc()
         return 0
 
@@ -723,7 +723,7 @@ def buy_or_cancel_krw_market(ticker, position_size_cash, delay=3, is_uptic=False
 if __name__ == '__main__':
     # bithumb = _create_bithumb_api()
     print(f'{get_krw_balance():}')
-    # print('btc 매수 가능 수량:', calc_buy_quantity('BTC'))
+    # print('btc 매수 가능 수량:', calc_total_buy_quantity('BTC'))
 
     # order_desc = buy_limit_price('XRP', 1020.0, 3)
     # print(order_desc)

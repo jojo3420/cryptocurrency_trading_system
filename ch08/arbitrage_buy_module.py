@@ -74,7 +74,7 @@ def restfull_buy_main():
             #     order_book = pybithumb.get_orderbook(BTC_TICKER)
             #     bids = order_book.get('bids', [])
             #     bid = bids[0].get('price', 0)
-            #     quantity = calc_buy_quantity(BTC_TICKER, krw)
+            #     quantity = calc_total_buy_quantity(BTC_TICKER, krw)
             #     print(f'qty: {quantity}')
             #     order_desc = buy_limit_price('BTC', bid, quantity)
             #     print(f'BTC 매수주문결과: {order_desc}')
@@ -161,7 +161,7 @@ def analysis_transaction(symbol: str, btc_market_contract_price: float):
             print(f'원화로 매수후 비트코인 마켓에서 코인 매도 {ticker}')
             # total_cash, used = get_krw_balance()
             # krw_size = total_cash - used
-            # qty = calc_buy_quantity(ticker, order_krw=krw_size)
+            # qty = calc_total_buy_quantity(ticker, order_krw=krw_size)
             # entry_price, order_desc = buy_or_cancel_krw_market(ticker, position_size_cash=krw_size, is_uptic=True)
             # print(f'원화 매수 => entry_price: {entry_price}, order_desc: {order_desc}')
             # if entry_price and order_desc:
