@@ -121,11 +121,11 @@ def save_transaction_history(data_dict: dict) -> None:
         traceback.print_exc()
 
 
-def get_entry_price(sub_uuid: str) -> int:
+def get_entry_price(uuid: str) -> int:
     """ 진입가(매수가격) 조회 """
     sql = 'SELECT price FROM coin_transaction_history ' \
-          ' WHERE sub_uuid = %s AND position = %s AND exchange_name =%s'
-    temp_t = select_db(sql, (sub_uuid, 'bid', 'upbit'))
+          ' WHERE order_no = %s AND position = %s AND exchange_name =%s'
+    temp_t = select_db(sql, (uuid, 'bid', 'upbit'))
     if temp_t:
         return temp_t[0][0]
     return 0

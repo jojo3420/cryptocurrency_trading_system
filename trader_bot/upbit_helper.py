@@ -373,8 +373,9 @@ class UpbitHelper:
         # except Exception as E:
         #     log(f'get_bought_list() 예외 => {str(E)}')
         sql = "SELECT ticker as symbol FROM coin_bought_list " \
-              "WHERE is_sell = %s AND type = %s "
-        tickers_tup: tuple = select_db(sql, (False, 'upbit'))
+              " WHERE is_sell = %s AND exchange_name = %s " \
+              " AND type = %s"
+        tickers_tup: tuple = select_db(sql, (False, 'upbit', 'vol'))
         if tickers_tup:
             return [tup[0] for tup in tickers_tup]
         elif isinstance(tickers_tup, tuple) and len(tickers_tup) == 0:
@@ -430,26 +431,17 @@ class UpbitHelper:
         uuid = get_entry_order_uuid(symbol, is_sell=False)
         if uuid:
             _, ticker = symbol.split('-')
-            entry_price = get_entry_price(uuid)
+            entry_price = self.get_entry_price(uuid)
             curr_price = pyupbit.get_current_price(symbol)
             if entry_price and curr_price:
                 yields = calc_yield(entry_price=entry_price, ask_price=curr_price)
-                log(f'수익률:  => {yields:.2f}%')
+                log(f'{symbol} 수익률:  => {yields:.2f}%')
                 if yields and yields < standard_loss_ratio:
                     _, available_qty, used = self.get_coin_balance(ticker)
                     log(f'손실발생 -> 매도프로세스 진행 {available_qty}')
-                    if available_qty > 0:
-                        ret = self.sell_current_price(symbol, available_qty)
-                        return ret
-                    else:
-                        prev_order = self.get_order_state(symbol)
-                        uuid = prev_order.get('uuid')
-                        cancel = self.order_cancel(uuid)
-                        if cancel is True:
-                            log('주문취소후 재귀호출!')
-                            return self.check_loss_sell(symbol)
+                    return uuid, available_qty
                 else:
-                    return {}
+                    return '', 0
 
     def trailing_stop(self, ticker):
         """
@@ -536,9 +528,25 @@ class UpbitHelper:
         'locked': '4.0', 'executed_volume': '0.0',
         'trades_count': 0, 'trades': []}
 
-
         """
         return self.api.get_order(ticker_or_uuid=symbol_or_uuid)
+
+    def get_entry_price(self, uuid):
+        prices = []
+        try:
+            ret = self.get_order_state(uuid)
+            if ret:
+                trades = ret.get('trades', [])
+                for sub_ret in trades:
+                    price = int(float(sub_ret.get('price')))
+                    if price:
+                        prices.append(price)
+            avg_price = sum(prices) / len(prices)
+            return avg_price
+        except Exception as e:
+            log(f'upbit.get_entry_price() 예외 {str(e)}')
+            traceback.print_exc()
+            return get_entry_price(uuid)
 
 
 def get_tickers_by(market='KRW', parse=False) -> list:
@@ -675,7 +683,6 @@ if __name__ == '__main__':
 
     print('cash: ', upbit.get_cash_balance())
     print(upbit.get_coin_balance())
-    # print(upbit.get_coin_balance('ALL'))
     print(upbit.get_coin_balance('XRP'))
     print(upbit.get_coin_balance('ETH'))
     print('최하위 매도호가: ', get_lowest_ask_info(symbol, logging=False))
@@ -712,7 +719,19 @@ if __name__ == '__main__':
     # print(r)
 
     # print('매수주문 대기 상태: ', upbit.get_order_state('01e6c4f0-4e9c-4616-a6a9-b36437ed64e0'))
-    print('매도주문 대기 상태: ', upbit.get_order_state('196ec126-9b92-4319-af90-d251543f91a2'))
+    # print('매도주문 대기 상태: ', upbit.get_order_state('196ec126-9b92-4319-af90-d251543f91a2'))
     # print('주문 상태: ', upbit.get_order_state(symbol))
     # df = pyupbit.get_ohlcv(symbol)
     # print(df.tail())
+
+    for uuid in [
+        '04bec938-0eb9-473f-a328-722aac85e5c8',
+        '1eac640a-eeda-4d1f-a1f7-14011c627b8c',
+        '21c652d8-2e7c-4f6f-a7f8-6cd8996e7875',
+        '2395fa69-4c41-4c9b-a795-b1d6cfb5f789',
+        '717eb6ee-75b8-4948-bec3-8114633db10b',
+        '71813328-8529-42c1-bbb1-684b663ca81d',
+        '79a85a02-adc6-40d0-96f3-9fb46fb53606',
+        'de61b1ad-cd1b-4986-bb02-f0f09c537e54'
+    ]:
+        print(upbit.get_order_state(uuid))
