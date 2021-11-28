@@ -96,19 +96,22 @@ def save_transaction_history(data_dict: dict) -> None:
         funds = data_dict.get('funds', '')
         if position == 'bid':  # 매수 거래
             sql = 'INSERT INTO coin_transaction_history ' \
-                  ' (order_no, sub_uuid, type, date, ticker, ' \
-                  ' position, price, quantity, target_price, R,' \
-                  ' fee, transaction_krw_amount, exchange_name) ' \
+                  ' (' \
+                  ' order_no, sub_uuid, type, date, ticker, ' \
+                  ' position, price, quantity, target_price, stop_loss_price, ' \
+                  ' R, fee, transaction_krw_amount, exchange_name' \
+                  ' ) ' \
                   ' VALUES (' \
                   ' %s, %s, %s, %s, %s,' \
                   ' %s, %s, %s, %s, %s,' \
-                  ' %s, %s, %s' \
+                  ' %s, %s, %s, %s' \
                   ')'
             target_price = data_dict.get('target_price', 0)
             R = data_dict.get('R', 0.5)
+            stop_loss_price = data_dict.get('stop_loss_price', 0)
             mutation_db(sql, (uuid, sub_uuid, type_str, today, symbol,
-                              position, price, quantity, target_price, fee,
-                              R, funds, exchange_name)
+                              position, price, quantity, target_price, stop_loss_price,
+                              fee, R, funds, exchange_name)
                         )
         elif position == 'ask':  # 매도 거래
             yield_ratio = data_dict.get('yield', 0)
@@ -173,6 +176,19 @@ def get_bought_list():
         return []
 
 
+def get_stop_loss_price_by(ticker: str, position: str):
+    type_str = 'vol'
+    exchange = 'upbit'
+    today = get_today_format()
+    sql = "SELECT stop_loss_price FROM coin_transaction_history " \
+          " WHERE ticker = %s AND position = %s " \
+          " AND type = %s AND exchange_name = %s " \
+          " AND date = %s "
+    tup = select_db(sql, (ticker, position, type_str, exchange, today))
+    if tup:
+        return tup[0][0]
+
+
 if __name__ == '__main__':
     print('TEST')
     # 매수 희망 종목 조회
@@ -180,3 +196,4 @@ if __name__ == '__main__':
     print(buy_symbol_list, ratio_list, r_list)
     uuid = get_entry_order_uuid('KRW-XRP', False)
     print(uuid)
+    print(get_stop_loss_price_by('KRW-FLOW', 'bid'))

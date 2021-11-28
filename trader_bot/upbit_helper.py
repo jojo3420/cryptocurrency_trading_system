@@ -686,7 +686,7 @@ if __name__ == '__main__':
     # print(r)
 
     # print('매수주문 대기 상태: ', upbit.get_order_state('01e6c4f0-4e9c-4616-a6a9-b36437ed64e0'))
-    print('매도주문 대기 상태: ', upbit.get_order_state('0cf50e9c-0af3-46b0-bf65-19c70058e302'))
+    print('매도주문 상태: ', upbit.get_order_state('0cf50e9c-0af3-46b0-bf65-19c70058e302'))
     # print('주문 상태: ', upbit.get_order_state(symbol))
     # df = pyupbit.get_ohlcv(symbol, count=20)
     # print(df)

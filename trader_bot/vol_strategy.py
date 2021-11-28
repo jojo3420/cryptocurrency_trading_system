@@ -18,8 +18,9 @@ from money_management_system import *
 class BreakVolatility:
     def __init__(self, upbit):
         self.upbit = upbit
-        self.find_bull_toggle = False
+        self.find_bull_toggle = True
         self.bull_coins = []
+        self.tr_history = {}
 
     def setup(self):
         if self.find_bull_toggle:
@@ -81,13 +82,16 @@ class BreakVolatility:
                         'position': side, 'symbol': symbol,
                         'uuid': uuid, 'sub_uuid': sub_uuid,
                         'price': entry_price, 'quantity': quantity,
-                        'funds': funds, 'fee': paid_fee,
+                        'stop_loss_price': self.tr_history[symbol].get('stop_loss_price'),
                         'target_price': target_price, 'R': R,
+                        'funds': funds, 'fee': paid_fee,
                     }
                     save_transaction_history(data_dict)
                     send_coin_bot(f'{symbol} 체결됨 => {data_dict}')
                     saved = save_bought_list(uuid, symbol)
                     log(f'save_bought_list => {saved}')
+                    if self.tr_history[symbol]:
+                        self.tr_history[symbol].update(data_dict)
                 if executed_qty == quantity and remaining_qty == 0:
                     log(f'전체 주문 체결 완료 => {b_state}')
                 else:
@@ -110,23 +114,29 @@ class BreakVolatility:
         :return:
         """
         available_cash, _ = self.upbit.get_cash_balance()
-        investment_cash = int(available_cash * 0.01)
-        # print(f'{symbol} 허용가능한 손실금액: {investment_cash}')
+        allowable_loss_amount = int(available_cash * 0.01)
+        # print(f'{symbol} 허용가능한 손실금액: {target_loss_amount}')
         quantity, position_amount, stop_loss_price = calc_position_size_by_loss_percent(symbol, allowable_loss_percent,
-                                                                                        investment_cash)
+                                                                                        target_loss_amount=allowable_loss_amount)
         if quantity > 0:
             # log(f'{symbol} 수량: {quantity}, 진입금액: {position_amount:,.0f} 스탑로스: {stop_loss_price}')
             target_price = calc_target_price(symbol, R)
             curr_price = pyupbit.get_current_price(symbol)
             if target_price and curr_price and curr_price > target_price:
                 log(f'변동성 돌파됨 {symbol}')
-                ret = self.upbit.buy_current_price(symbol, 1)
+                ret = self.upbit.buy_current_price(symbol, quantity)
                 uuid = ret.get('uuid', None)
                 log(f'매수주문 => {uuid}')
                 time.sleep(1)
+                self.tr_history.setdefault({'target_price': target_price, 'R': R, 'position_amount': position_amount,
+                                            'stop_loss_price': stop_loss_price, 'uuid': uuid,
+                                            'allowable_loss_amount': allowable_loss_amount,
+                                            }, {})
                 self.check_bid_order(uuid, target_price, R)
             else:
                 log(f'{symbol} 변동성 돌파 실패! (주문X)')
+        # else:
+        #     log(f'주문가능 수량 없음: {symbol}')
 
     def sell_after_logic(self, uuid_list: list, sleep_time=1):
         """
@@ -183,10 +193,11 @@ class BreakVolatility:
         for sym in bought_symbol_list:
             _uuid = get_entry_order_uuid(sym, is_sell=False)
             entry_price = get_entry_price(_uuid)
-            _, __, stop_loss_price = calc_position_size_by_loss_percent(sym, allowable_loss_percent, 500000,
-                                                                        entry_price=entry_price)
+            if self.tr_history[sym].get('stop_loss_price'):
+                stop_loss_price = self.tr_history[sym].get('stop_loss_price')
+            else:
+                stop_loss_price = get_stop_loss_price_by(sym, 'bid')
             curr_price = pyupbit.get_current_price(sym)
-            # print(f'{sym} 현재가: {curr_price:,.0f} 손절가: {stop_loss_price:,.0f}')
             _ticker, available_qty, _used = self.upbit.get_coin_balance(sym)
             if curr_price and stop_loss_price and stop_loss_price > curr_price:
                 ret = self.upbit.sell_current_price(sym, available_qty)
@@ -195,8 +206,16 @@ class BreakVolatility:
                 uuid = ret.get('uuid', '')
                 uuid_li.append(uuid)
             else:
+                if self.tr_history.get(sym):
+                    entry_price = self.tr_history.get(sym).get('entry_price')
+                    allowable_loss_amount = self.tr_history.get(sym).get('allowable_loss_amount')
+                else:
+                    available_cash, _ = self.upbit.get_cash_balance()
+                    allowable_loss_amount = int(available_cash * 0.01)
+                log(f'허용 가능한 손실금액: {allowable_loss_amount:,.0f}원')
                 diff = curr_price - entry_price
-                log(f'{sym} 손실금액: {available_qty * diff:,.1f}원')
+                log(f'{sym} 손실금액: {(available_qty + _used) * diff:,.1f}원')
+                log(f'진입가격: {entry_price:,.0f} 손절가: {stop_loss_price:,.0f}')
 
             time.sleep(0.5)
         self.sell_after_logic(uuid_li)

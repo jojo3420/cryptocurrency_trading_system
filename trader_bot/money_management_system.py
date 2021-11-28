@@ -94,7 +94,8 @@ def calc_position_size_by_loss_percent(symbol, loss_percent=0.1, target_loss_amo
 
 
 if __name__ == '__main__':
-    symbol = 'KRW-ADA'
+    symbol = 'KRW-FLOW'
+    # symbol = 'KRW-STPT'
     days = 20
     cnt, investing_amount, loss_price = calc_position_size_by_volatility(symbol, days, target_loss_amount=5000)
     print(f'{symbol} 변동성 고려한 손실금액 고정한 포지션규모 계산')
