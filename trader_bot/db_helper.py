@@ -73,6 +73,13 @@ def save_transaction_history(data_dict: dict) -> None:
     주문 거래 내역 저장하기 DB
     :param order_desc => order_type, ticker, order_no,
                         currency, price, quantity, target_price, R
+    data_dict = {
+        'position': side, 'symbol': symbol,
+        'uuid': uuid, 'sub_uuid': sub_uuid,
+        'price': entry_price, 'quantity': quantity,
+        'funds': funds, 'fee': paid_fee,
+        'target_price': target_price, 'R': R,
+    }
     :return:
     """
     today = get_today_format()
@@ -92,11 +99,13 @@ def save_transaction_history(data_dict: dict) -> None:
                   ' (order_no, sub_uuid, type, date, ticker, ' \
                   ' position, price, quantity, target_price, R,' \
                   ' fee, transaction_krw_amount, exchange_name) ' \
-                  ' VALUES (%s, %s, %s, %s, %s,' \
+                  ' VALUES (' \
                   ' %s, %s, %s, %s, %s,' \
-                  ' %s, %s, %s)'
-            target_price = data_dict.get('target_price', '')
-            R = data_dict.get('R', '')
+                  ' %s, %s, %s, %s, %s,' \
+                  ' %s, %s, %s' \
+                  ')'
+            target_price = data_dict.get('target_price', 0)
+            R = data_dict.get('R', 0.5)
             mutation_db(sql, (uuid, sub_uuid, type_str, today, symbol,
                               position, price, quantity, target_price, fee,
                               R, funds, exchange_name)
@@ -149,10 +158,25 @@ def get_transaction_history(ticker: str, uuid: str) -> tuple:
         return temp_t[0]
 
 
+def get_bought_list():
+    """
+    현재 보유한 코인 리스트 조회
+    :return:
+    """
+    sql = "SELECT ticker as symbol FROM coin_bought_list " \
+          " WHERE is_sell = %s AND exchange_name = %s " \
+          " AND type = %s"
+    tickers_tup: tuple = select_db(sql, (False, 'upbit', 'vol'))
+    if tickers_tup:
+        return [tup[0] for tup in tickers_tup]
+    elif isinstance(tickers_tup, tuple) and len(tickers_tup) == 0:
+        return []
+
+
 if __name__ == '__main__':
     print('TEST')
     # 매수 희망 종목 조회
-    # buy_symbol_list, ratio_list, r_list = get_buy_wish_list()
-    # print(buy_symbol_list, ratio_list, r_list)
+    buy_symbol_list, ratio_list, r_list = get_buy_wish_list()
+    print(buy_symbol_list, ratio_list, r_list)
     uuid = get_entry_order_uuid('KRW-XRP', False)
     print(uuid)

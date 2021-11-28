@@ -37,7 +37,7 @@ class UpbitHelper:
         quantity = round(quantity, 4)
         if symbol and '-' in symbol and quantity > 0:
             curr_price = pyupbit.get_current_price(symbol)
-            minimum_amount = self.get_minimum_order_possible_amount(symbol)  # 체크 최소 주문수량
+            minimum_amount = self.get_minimum_order_possible_amount(symbol)  # 최소 주문 가능 수량
             order_total_amount = entry_price * quantity
             if self.debug_mode:
                 log(f'최소주문금액: {minimum_amount}, 나의 주문금액: {order_total_amount}')
@@ -47,12 +47,13 @@ class UpbitHelper:
                 log(msg)
                 return {'err_msg': msg}
 
-            log(f'리플 원화 현재가: {curr_price:,.0f}')
+            log(f'{symbol} 현재가: {curr_price:,.0f}')
             # 지정가 매수
             ret = self.api.buy_limit_order(symbol, entry_price, volume=quantity)
             if self.debug_mode:
                 log(f'매수 주문결과: {ret}')
                 # {'uuid': '13e79a6c-78f7-4759-af47-fb01086d6926', 'side': 'bid', 'ord_type': 'limit', 'price': '995.0', 'state': 'wait', 'market': 'KRW-XRP', 'created_at': '2021-09-13T20:52:51+09:00', 'volume': '10.0', 'remaining_volume': '10.0', 'reserved_fee': '4.975', 'remaining_fee': '4.975', 'paid_fee': '0.0', 'locked': '9954.975', 'executed_volume': '0.0', 'trades_count': 0}
+
             return ret
         else:
             msg = f'티커명 규칙은 마켓심볼-매수할코인심볼 입니다. {symbol}'
@@ -123,34 +124,6 @@ class UpbitHelper:
             _, ticker = symbol.split('-')
             _, available, used = self.get_coin_balance(ticker)
             return available
-
-    # def strategy_buy(self, symbol: str, position_size_ratio: float, R=0.5):
-    def strategy_buy(self, symbol: str, entry_qty: float, target_price: int) -> tuple:
-        """
-        변동성 돌파 전략으로 코인 매수
-        :param symbol: 코인티커 BTC, ETH, XRP ...
-        :param position_size_ratio: 총자산에서 매수할 비율
-        :param R: R비율
-        :return:
-        """
-        curr_price = pyupbit.get_current_price(symbol)
-        if target_price and curr_price:
-            if curr_price > target_price:
-                # if True:
-                log(f'변동성 돌파됨 {symbol}')
-                if entry_qty:
-                    ret = self.buy_current_price(symbol, entry_qty)
-                    # print(ret)
-                    # {'uuid': '13e79a6c-78f7-4759-af47-fb01086d6926', 'side': 'bid',
-                    # 'ord_type': 'limit', 'price': '995.0', 'state': 'wait',
-                    # 'market': 'KRW-XRP', 'created_at': '2021-09-13T20:52:51+09:00',
-                    # 'volume': '10.0', 'remaining_volume': '10.0',
-                    # 'reserved_fee': '4.975', 'remaining_fee': '4.975', 'paid_fee': '0.0',
-                    # 'locked': '9954.975', 'executed_volume': '0.0', 'trades_count': 0}
-                    uuid = ret.get('uuid', '')
-                    return True, uuid
-        log(f'변동성 돌파 실패 => {symbol}')
-        return False, ''
 
     def sell(self, symbol: str, quantity: float, ask_price: int) -> dict:
         """
@@ -262,23 +235,27 @@ class UpbitHelper:
         :return:
         """
         uuid_list = []
-        coin_balances = self.get_coin_balance('ALL')
-        for ticker, available_qty, used in coin_balances:
-            symbol = f'KRW-{ticker}'
-            log(f'{symbol} 코인 청산 주문!')
-            if available_qty > 0:
-                ret: dict = self.sell_current_price(symbol, available_qty)
-                # print(f'sell_all ret: {ret}')
-                err_msg = ret.get('err_msg', '')
-                state = ret.get('state', '')
-                log(f'state: {state}')
-                if err_msg:
-                    log(err_msg)
-                else:
-                    uuid = ret.get('uuid')
-                    uuid_list.append(uuid)
-            time.sleep(0.5)
-        return uuid_list
+        while True:
+            coin_balances = self.get_coin_balance('ALL')
+            if len(coin_balances) == 0:
+                return uuid_list
+            # 청산 로직
+            for ticker, available_qty, used in coin_balances:
+                symbol = f'KRW-{ticker}'
+                log(f'{symbol} 코인 청산 주문!')
+                if available_qty > 0:
+                    ret: dict = self.sell_current_price(symbol, available_qty)
+                    # print(f'sell_all ret: {ret}')
+                    err_msg = ret.get('err_msg', '')
+                    state = ret.get('state', '')
+                    log(f'state: {state}')
+                    if err_msg:
+                        log(err_msg)
+                    else:
+                        uuid = ret.get('uuid')
+                        uuid_list.append(uuid)
+                time.sleep(0.4)
+            time.sleep(0.2)
 
     def order_cancel(self, uuid: str) -> bool:
         """
@@ -362,25 +339,6 @@ class UpbitHelper:
             log(f'{_}, available: {available:,}, used: {used:,}')
         return available, used
 
-    def get_bought_list(self):
-        """
-        현재 보유한 코인 리스트 조회
-        :return:
-        """
-        # try:
-        #     balance_list = self.get_coin_balance('ALL')
-        #     return [el[0] for el in balance_list]
-        # except Exception as E:
-        #     log(f'get_bought_list() 예외 => {str(E)}')
-        sql = "SELECT ticker as symbol FROM coin_bought_list " \
-              " WHERE is_sell = %s AND exchange_name = %s " \
-              " AND type = %s"
-        tickers_tup: tuple = select_db(sql, (False, 'upbit', 'vol'))
-        if tickers_tup:
-            return [tup[0] for tup in tickers_tup]
-        elif isinstance(tickers_tup, tuple) and len(tickers_tup) == 0:
-            return []
-
     def get_transaction_history(self):
         pass
 
@@ -461,37 +419,37 @@ class UpbitHelper:
         'wait', 'cancel', 'done'
 
         1) 매수주문
-        A. 미체결상태
-         {'uuid': '01e6c4f0-4e9c-4616-a6a9-b36437ed64e0', 'side': 'bid',
-        'ord_type': 'limit', 'price': '1075.0', 'state': 'wait', 'market': 'KRW-XRP',
-        'created_at': '2021-09-24T20:27:22+09:00',
-        'volume': '5.0', 'remaining_volume': '5.0', 'reserved_fee': '2.6875',
-        'remaining_fee': '2.6875', 'paid_fee': '0.0',
-        'locked': '5377.6875', 'executed_volume': '0.0',
-        'trades_count': 0, 'trades': []}
+            A. 미체결상태
+             {'uuid': '01e6c4f0-4e9c-4616-a6a9-b36437ed64e0', 'side': 'bid',
+            'ord_type': 'limit', 'price': '1075.0', 'state': 'wait', 'market': 'KRW-XRP',
+            'created_at': '2021-09-24T20:27:22+09:00',
+            'volume': '5.0', 'remaining_volume': '5.0', 'reserved_fee': '2.6875',
+            'remaining_fee': '2.6875', 'paid_fee': '0.0',
+            'locked': '5377.6875', 'executed_volume': '0.0',
+            'trades_count': 0, 'trades': []}
 
-        B. 체결상태
-        {'uuid': 'c9405bee-0126-42a5-8678-f89540d3b870', 'side': 'bid',
-        'ord_type': 'limit', 'price': '1145.0', 'state': 'done', 'market': 'KRW-XRP',
-        'created_at': '2021-09-25T20:29:49+09:00', 'volume': '4.6061', 'remaining_volume': '0.0',
-        'reserved_fee': '2.63699225', 'remaining_fee': '0.0', 'paid_fee': '2.63699225',
-        'locked': '0.0', 'executed_volume': '4.6061',
-        'trades_count': 1,
-        'trades': [
-            {'market': 'KRW-XRP', 'uuid': '1a45abbb-8daf-4810-aefb-99a1c1bfd8db',
-            'price': '1145.0', 'volume': '4.6061', '
-            funds': '5273.9845', 'created_at': '2021-09-25T20:29:49+09:00',
-            'side': 'bid'}
-         ]}
+            B. 체결상태
+            {'uuid': 'c9405bee-0126-42a5-8678-f89540d3b870', 'side': 'bid',
+            'ord_type': 'limit', 'price': '1145.0', 'state': 'done', 'market': 'KRW-XRP',
+            'created_at': '2021-09-25T20:29:49+09:00', 'volume': '4.6061', 'remaining_volume': '0.0',
+            'reserved_fee': '2.63699225', 'remaining_fee': '0.0', 'paid_fee': '2.63699225',
+            'locked': '0.0', 'executed_volume': '4.6061',
+            'trades_count': 1,
+            'trades': [
+                {'market': 'KRW-XRP', 'uuid': '1a45abbb-8daf-4810-aefb-99a1c1bfd8db',
+                'price': '1145.0', 'volume': '4.6061', '
+                funds': '5273.9845', 'created_at': '2021-09-25T20:29:49+09:00',
+                'side': 'bid'}
+             ]}
 
         C. 취소
-        {'uuid': '01e6c4f0-4e9c-4616-a6a9-b36437ed64e0', 'side': 'bid',
-        'ord_type': 'limit', 'price': '1075.0', 'state': 'cancel', 'market': 'KRW-XRP',
-        'created_at': '2021-09-24T20:27:22+09:00',
-        'volume': '5.0', 'remaining_volume': '5.0',
-        'reserved_fee': '2.6875', 'remaining_fee': '2.6875', 'paid_fee': '0.0',
-        'locked': '5377.6875', 'executed_volume': '0.0',
-        'trades_count': 0, 'trades': []}
+            {'uuid': '01e6c4f0-4e9c-4616-a6a9-b36437ed64e0', 'side': 'bid',
+            'ord_type': 'limit', 'price': '1075.0', 'state': 'cancel', 'market': 'KRW-XRP',
+            'created_at': '2021-09-24T20:27:22+09:00',
+            'volume': '5.0', 'remaining_volume': '5.0',
+            'reserved_fee': '2.6875', 'remaining_fee': '2.6875', 'paid_fee': '0.0',
+            'locked': '5377.6875', 'executed_volume': '0.0',
+            'trades_count': 0, 'trades': []}
 
 
         2) 매도주문
@@ -518,20 +476,23 @@ class UpbitHelper:
                 }
           ]}
 
-
         C. 취소
-        {'uuid': '8897d67e-a0b9-44ef-b07e-12549a6abbfa', 'side': 'ask',
-        'ord_type': 'limit', 'price': '5000.0', 'state': 'cancel', '
-        market': 'KRW-XRP', 'created_at': '2021-09-24T20:33:43+09:00',
-        'volume': '4.0', 'remaining_volume': '4.0',
-        'reserved_fee': '0.0', 'remaining_fee': '0.0', 'paid_fee': '0.0',
-        'locked': '4.0', 'executed_volume': '0.0',
-        'trades_count': 0, 'trades': []}
-
+            {'uuid': '8897d67e-a0b9-44ef-b07e-12549a6abbfa', 'side': 'ask',
+            'ord_type': 'limit', 'price': '5000.0', 'state': 'cancel', '
+            market': 'KRW-XRP', 'created_at': '2021-09-24T20:33:43+09:00',
+            'volume': '4.0', 'remaining_volume': '4.0',
+            'reserved_fee': '0.0', 'remaining_fee': '0.0', 'paid_fee': '0.0',
+            'locked': '4.0', 'executed_volume': '0.0',
+            'trades_count': 0, 'trades': []}
         """
         return self.api.get_order(ticker_or_uuid=symbol_or_uuid)
 
     def get_entry_price(self, uuid):
+        """
+        매수한 코인의 진입가격 조회
+        :param uuid:
+        :return:
+        """
         prices = []
         try:
             ret = self.get_order_state(uuid)
@@ -670,7 +631,8 @@ def calc_yield(entry_price: int, ask_price: int) -> float:
 
 if __name__ == '__main__':
     symbol = 'KRW-ADA'
-    symbol = 'KRW-XRP'
+    # symbol = 'KRW-XRP'
+    # symbol = 'KRW-BTC'
     upbit = UpbitHelper()
     # krw_tickers = get_tickers_by('KRW')
     # print(krw_tickers)
@@ -684,7 +646,7 @@ if __name__ == '__main__':
     print('cash: ', upbit.get_cash_balance())
     print(upbit.get_coin_balance())
     print(upbit.get_coin_balance('XRP'))
-    print(upbit.get_coin_balance('ETH'))
+    print(upbit.get_coin_balance('BTC'))
     print('최하위 매도호가: ', get_lowest_ask_info(symbol, logging=False))
     print('최상위 매수호가: ', get_highest_bid_info(symbol))
 
@@ -719,19 +681,7 @@ if __name__ == '__main__':
     # print(r)
 
     # print('매수주문 대기 상태: ', upbit.get_order_state('01e6c4f0-4e9c-4616-a6a9-b36437ed64e0'))
-    # print('매도주문 대기 상태: ', upbit.get_order_state('196ec126-9b92-4319-af90-d251543f91a2'))
+    print('매도주문 대기 상태: ', upbit.get_order_state('0cf50e9c-0af3-46b0-bf65-19c70058e302'))
     # print('주문 상태: ', upbit.get_order_state(symbol))
-    # df = pyupbit.get_ohlcv(symbol)
-    # print(df.tail())
-
-    for uuid in [
-        '04bec938-0eb9-473f-a328-722aac85e5c8',
-        '1eac640a-eeda-4d1f-a1f7-14011c627b8c',
-        '21c652d8-2e7c-4f6f-a7f8-6cd8996e7875',
-        '2395fa69-4c41-4c9b-a795-b1d6cfb5f789',
-        '717eb6ee-75b8-4948-bec3-8114633db10b',
-        '71813328-8529-42c1-bbb1-684b663ca81d',
-        '79a85a02-adc6-40d0-96f3-9fb46fb53606',
-        'de61b1ad-cd1b-4986-bb02-f0f09c537e54'
-    ]:
-        print(upbit.get_order_state(uuid))
+    # df = pyupbit.get_ohlcv(symbol, count=20)
+    # print(df)

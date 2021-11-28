@@ -1,5 +1,3 @@
-# import time
-# import traceback
 import os
 import sys
 
@@ -10,11 +8,11 @@ else:
     sys.path.append('/Users/maegmini/Code/sourcetree-git/python/cryptocurrency_trading_system')
 
 from common.telegram_bot import system_log, send_coin_bot
-from datetime import datetime
 from upbit_helper import *
 from db_helper import *
 from common.utils import log
 from math_helper import *
+from money_management_system import *
 
 
 def setup():
@@ -22,106 +20,110 @@ def setup():
     # TODO - 급등주 찾기
 
 
+def check_bid_order(uuid: str, target_price, R=0.5):
+    """
+    체결 상태 확인 => 매수
+    :param uuid: 주문pk
+    :return:
+    """
+    if uuid:
+        b_ret = upbit.get_order_state(uuid)
+        print(b_ret)
+        b_state = b_ret.get('state', '')
+        if b_state == 'wait':
+            cancel = upbit.order_cancel(uuid)
+            log(f'미체결 주문 취소하기: ({cancel}) ')
+        elif b_state == 'done':
+            trades_count = b_ret.get('trades_count', 0)
+            log(f'매수 체결된 주문 있음: {trades_count}건')
+            executed_qty = float(b_ret.get('executed_volume', 0))
+            trades = b_ret.get('trades')
+            paid_fee = b_ret.get('paid_fee')
+            remaining_qty = float(b_ret.get('remaining_volume'))  # 주문수량에서 미체결된 수량
+            # 1)체결된 거래내역 저장
+            for sub_ret in trades:
+                sub_uuid = sub_ret.get('uuid')
+                entry_price = sub_ret.get('price')
+                quantity = sub_ret.get('volume')
+                funds = sub_ret.get('funds')
+                side = sub_ret.get('side')
+                data_dict = {
+                    'position': side, 'symbol': symbol,
+                    'uuid': uuid, 'sub_uuid': sub_uuid,
+                    'price': entry_price, 'quantity': quantity,
+                    'funds': funds, 'fee': paid_fee,
+                    'target_price': target_price, 'R': R,
+                }
+                save_transaction_history(data_dict)
+                send_coin_bot(f'{symbol} 체결됨 => {data_dict}')
+                saved = save_bought_list(uuid, symbol)
+                log(f'save_bought_list => {saved}')
+            if executed_qty == quantity and remaining_qty == 0:
+                log(f'전체 주문 체결 완료 => {b_state}')
+            else:
+                # '미체결 수량은 체결창 호가창에 남아 있다.. 추후에 체결될 수 있는데!?
+                # '미체결 주문수량을 취소해야한다. 그대로 놔두면 나중에 체결되어도... DB에 기록할 수 없다.
+                log(f'일부체결 => 미체결수량 {remaining_qty}')
+                log(f'b_ret: {b_ret}')
+                cancel = upbit.order_cancel(uuid)
+                print(f'미체결 주문 취소하기: {cancel}')
+        else:
+            log('*** 주문 상태 확인 필요 ***')
+            print(b_ret)
+
+
 def buy_coin(symbol, R):
     """
-    매수로직
-      1) 진입 규모 계산: 목표 변동성 타켓(2%) 기준으로 전일 변동성으로 계산하여 2% 내에 손실 발생하도록 진입규모 계산
-      전일 변동성이 높을 때: 적은 수량 진입
-      전일 변동성이 낮을 때: 많은 수량 진입
-
-      2)
-
-    :param symbol:
-    :param R:
+    코인 매수하기
+    :param upbit: 매수모듈
+    :param symbol: 매수할 코인
+    :param R: 윌리엄스 k값
     :return:
     """
     available_cash, _ = upbit.get_cash_balance()
-    target_price = calc_target_price(symbol, R)
-    # minimum_amount = upbit.get_minimum_order_possible_amount(symbol)  # 최소주문금액
-    # position_qty = calc_position_sizing(symbol, 5, available_cash, minimum_amount)
-    position_qty = calc_position_sizing_target(symbol, coin_buy_wish_list, total_cash=available_cash)
-    log(f'{symbol} 진입 수량: {position_qty}')
-    if position_qty > 0:
-        order_return, uuid = upbit.strategy_buy(symbol, position_qty, target_price)
-        if order_return is True and uuid:
-            log(f'매수주문 OK {symbol}')
+    investment_cash = int(available_cash * 0.01)
+    # print(f'{symbol} 허용가능한 손실금액: {investment_cash}')
+    quantity, position_amount, stop_loss_price = calc_position_size_by_loss_percent(symbol, allowable_loss_percent,
+                                                                                    investment_cash)
+    if quantity > 0:
+        # log(f'{symbol} 수량: {quantity}, 진입금액: {position_amount:,.0f} 스탑로스: {stop_loss_price}')
+        target_price = calc_target_price(symbol, R)
+        curr_price = pyupbit.get_current_price(symbol)
+        if target_price and curr_price and curr_price > target_price:
+            log(f'변동성 돌파됨 {symbol}')
+            ret = upbit.buy_current_price(symbol, 1)
+            uuid = ret.get('uuid', None)
+            log(f'매수주문 => {uuid}')
             time.sleep(1)
-            b_ret = upbit.get_order_state(uuid)
-            b_state = b_ret.get('state', '')
-            if b_state == 'wait':
-                cancel = upbit.order_cancel(uuid)
-                log(f'주문취소하고({cancel}) 다음기회에..')
-            elif b_state == 'done':
-                trades_count = b_ret.get('trades_count', 0)
-                log(f'체결된 주문 있음: {trades_count}건')
-                trades = b_ret.get('trades', [])
-                fee = b_ret.get('paid_fee')
-                executed_qty = float(b_ret.get('executed_volume', 0))
-                remaining_qty = float(b_ret.get('remaining_volume'))
-                if executed_qty:  # 체결된 수량 있음
-                    # 1)체결된 거래내역 저장
-                    for sub_ret in trades:
-                        sub_uuid = sub_ret.get('uuid', '')
-                        entry_price = sub_ret.get('price')
-                        quantity = sub_ret.get('volume')
-                        funds = sub_ret.get('funds')
-                        data_dict = {
-                            'position': 'bid', 'symbol': symbol,
-                            'uuid': uuid, 'sub_uuid': sub_uuid,
-                            'price': entry_price, 'quantity': quantity,
-                            'funds': funds, 'fee': fee,
-                            'target_price': target_price, 'R': R,
-                        }
-                        save_transaction_history(data_dict)
-                        send_coin_bot(f'{symbol} 체결됨 => {data_dict}')
-
-                    saved = save_bought_list(uuid, symbol)
-                    log(f'save_bought_list => {saved}')
-                if executed_qty == position_qty and remaining_qty == 0:
-                    log(f'전체 주문 체결 완료 => {b_state}')
-                else:
-                    log(f'일부체결 => 미체결수량 {remaining_qty}')
-                    log(f'b_ret: {b_ret}')
-                    bb_ret = upbit.get_order_state(uuid)
-                    log(f'bb_ret: {bb_ret}')
-                    log('미체결 수량은 체결창 호가창에 남아 있다.. 추후에 체결될 수 있는데!?  ')
-                    log('미체결 주문수량을 취소해야한다. 그대로 놔두면 나중에 체결되어도... DB에 기록할 수 없다.')
-            else:
-                log(b_ret)
+            check_bid_order(uuid, target_price, R)
         else:
-            log(f'{symbol} 변동성 돌파 실패!(주문X)')
-    else:
-        log(f'주문수량이 0 이하: {position_qty}')
+            log(f'{symbol} 변동성 돌파 실패! (주문X)')
 
 
-def sell_logic(uuid_list: list, sleep_time=1):
+def sell_after_logic(uuid_list: list, sleep_time=1):
+    """
+    매도 주문후 로직 처리
+        - bought_list 업데이트
+        - 거래내역 저장 transaction_history
+    :param uuid_list:
+    :param sleep_time:
+    :return:
+    """
     for uuid in uuid_list:
         ret = upbit.get_order_state(uuid)
         symbol = ret.get('market')
         state = ret.get('state')
         trade_count = ret.get('trade_count', 0)
-        log(f'sell_logic() 체결수량: {trade_count} ret: {ret}')
+        log(f'sell_after_logic() 체결수량: {trade_count} ret: {ret}')
         fee = ret.get('paid_fee')
         trades = ret.get('trade_count', [])
         _, ticker = symbol.split('-')
         time.sleep(sleep_time)
         if state == 'done':
-            _, available, used = upbit.get_coin_balance(ticker)
-            if available == 0 and used == 0:
+            sell_balance = upbit.get_coin_balance(ticker)
+            if len(sell_balance) == 0:
                 update_bought_list(symbol)
             for sub_ret in trades:
-                #        {'uuid': '196ec126-9b92-4319-af90-d251543f91a2', 'side': 'ask',
-                #           'ord_type': 'limit', 'price': '1150.0', 'state': 'done',
-                #           'market': 'KRW-XRP', 'created_at': '2021-09-26T09:00:04+09:00',
-                #           'volume': '4.6061', 'remaining_volume': '0.0',
-                #           'reserved_fee': '0.0', 'remaining_fee': '0.0', 'paid_fee': '2.6485075',
-                #           'locked': '0.0', 'executed_volume': '4.6061',
-                #           'trades_count': 1, 'trades': [
-                #                 {'market': 'KRW-XRP', 'uuid': '1bbbe1ee-e8e6-400d-954c-73ed4f9422ea',
-                #                 'price': '1150.0', 'volume': '4.6061', 'funds': '5297.015',
-                #                 'created_at': '2021-09-26T09:00:04+09:00', 'side': 'ask'
-                #                 }
-                #           ]}
                 sub_uuid = sub_ret.get('uuid')
                 ask_price = sub_ret.get('price')
                 quantity = sub_ret.get('volume')
@@ -140,106 +142,100 @@ def sell_logic(uuid_list: list, sleep_time=1):
         elif state == 'wait':
             cancel = upbit.order_cancel(uuid)
             log(f'{symbol} 주문 미체결로 취소처리: {cancel}')
-    time.sleep(0.5)
+        time.sleep(0.5)
+
+
+def check_stop_loss(bought_symbol_list):
+    """
+    종목별 현재 가격과 손절 가격 비교하여 청산 처리
+    :param bought_symbol_list:
+    :return:
+    """
+    uuid_li = []
+    for sym in bought_symbol_list:
+        _, __, stop_loss_price = calc_position_size_by_loss_percent(sym, allowable_loss_percent, 500000)
+        curr_price = pyupbit.get_current_price(sym)
+        if curr_price and stop_loss_price and stop_loss_price > curr_price:
+            _ticker, available_qty, _used = upbit.get_coin_balance(sym)
+            ret = upbit.sell_current_price(sym, available_qty)
+            print(f'손절매 매도: {sym}')
+            print(ret)
+            uuid = ret.get('uuid', '')
+            uuid_li.append(uuid)
+        time.sleep(0.5)
+    sell_after_logic(uuid_li)
 
 
 if __name__ == '__main__':
+    allowable_loss_percent = 0.05
     upbit = UpbitHelper()
     try:
         setup()
-        # basic_loss_ratio = -3.0  # 기본 손절선
         while True:
             # 메이저 코인 리스트
-            coin_buy_wish_list, coin_ratio_list, coin_r_list = get_buy_wish_list()
-            # balance_list = upbit.get_coin_balance()
-            # print(balance_list)
-            bought_symbol_list = upbit.get_bought_list()
-
-            # # 급등 코인 리스트
-            # bull_coin_list, bull_ratio_list, bull_r_list = get_bull_coin_list()
-            # coin_buy_wish_list = coin_buy_wish_list + bull_coin_list
-            # coin_ratio_list = coin_ratio_list + bull_ratio_list
-            # coin_r_list = coin_r_list + bull_r_list
-            # coin_bought_list: list = get_coin_bought_list()
-            #
-            # krw_balance, used_krw = upbit.get_cash_balance()
-            # log(f'가용 원화: {krw_balance:,} 주문에 사용한 금액: {used_krw:,}')
-
+            coin_buy_wish_list, _, _ = get_buy_wish_list()
+            bought_symbol_list = get_bought_list()
+            if bought_symbol_list is None:
+                log('예외발생 => 매수한 종목 리스트가 배열이 아닙니다.')
+                break
             today = datetime.now()
             # 전일 코인자산 청산 시간
-            start_sell_tm = today.replace(hour=9, minute=0, second=0, microsecond=0)
+            start_sell_tm = today.replace(hour=9, minute=1, second=0, microsecond=0)
             end_sell_tm = today.replace(hour=9, minute=6, second=0, microsecond=0)
             # 트레이딩 시간
             start_trading_tm = today.replace(hour=0, minute=0, second=1, microsecond=0)
             end_trading_tm = today.replace(hour=23, minute=55, second=0, microsecond=0)
             now_tm = datetime.now()
 
+            # 포트폴리오 모두 청산
             if start_sell_tm < now_tm < end_sell_tm:
                 log('포트폴리오 모두 청산!')
-                while True:
-                    balance: list = upbit.get_coin_balance()
-                    if len(balance) == 0:
-                        end_sell_tm = datetime.now()
-                        break
-                    uuid_list = upbit.sell_all()
-                    sell_logic(uuid_list)
+                uuid_list = upbit.sell_all()
+                sell_after_logic(uuid_list)
 
-            loss_sell_list = []
-            for symbol in bought_symbol_list:
-                uuid, available_qty = upbit.check_loss_sell(symbol, -3)
-                if uuid and available_qty > 0:
-                    ret = upbit.sell_current_price(symbol, available_qty)
-                    time.sleep(1)
-                    state = ret.get('state', '')
-                    _uuid = ret.get('uuid')
-                    if state == 'wait':
-                        cancel = upbit.order_cancel(_uuid)
-                        if cancel is True:
-                            log(f'미체결로 주문취소 => {cancel}')
-                    elif state == 'done':
-                        log(f'{symbol} 손절매 결과 ')
-                        loss_sell_list.append(_uuid)
-                # upbit.trailing_stop(symbol)
-                # time.sleep(0.1)
-                sell_logic(loss_sell_list)
-                time.sleep(0.5)
+            # 손절매: 포지션 정리
+            check_stop_loss(bought_symbol_list)
 
+            # 매수하기 - 변동성 돌파
             if start_trading_tm < now_tm < end_trading_tm:
-                # 매수하기 - 변동성 돌파
                 for i, symbol in enumerate(coin_buy_wish_list):
-                    # if ticker in daily_profit_list + daily_loss_coin_list:
-                    # 당일 수익창출 또는 당일 손절매 코인 당일 재매수 제외
-                    # continue
-                    if bought_symbol_list is None:
-                        break
                     if symbol not in bought_symbol_list:
-                        R = coin_r_list[i]  # 0.5
-                        buy_coin(symbol, R)
-                        time.sleep(0.5)
+                        buy_coin(symbol, R=0.5)
 
-            # # 10분 마다 수익률 기록
-            # if (now_tm.minute == 0 and 0 <= now_tm.second <= 9) \
-            #         or (now_tm.minute == 10 and 0 <= now_tm.second <= 9) \
-            #         or (now_tm.minute == 20 and 0 <= now_tm.second <= 9) \
-            #         or (now_tm.minute == 30 and 0 <= now_tm.second <= 9) \
-            #         or (now_tm.minute == 40 and 0 <= now_tm.second <= 9) \
-            #         or (now_tm.minute == 50 and 0 <= now_tm.second <= 9):
-            #     save_yield_history(get_total_yield(), len(coin_bought_list))
-            #
-            # # 텔레그램 수익률 보고!
-            if now_tm.minute == 0 and 0 <= now_tm.second <= 7:
-                # send_coin_bot()
-                time.sleep(3)
-
-            # # 매수 종목 없으면 강제 휴식
+            # # 매수 종목 없으면 10초 휴식하기
             if len(coin_buy_wish_list) == 0:
-                log('매수할 코인 없음. 휴식 10초')
+                log('매수할 코인 없음 => 10초 휴식...')
                 time.sleep(10)
 
             print('-' * 150)
             time.sleep(1)
     except Exception as e:
         msg = f'가상화폐 시스템 메인 로직 예외 발생. 시스템 종료됨 => {str(e)}'
-    log(msg)
-    traceback.print_exc()
-    system_log(msg)
+        log(msg)
+        traceback.print_exc()
+        system_log(msg)
+
+        # loss_sell_list = []
+        # for symbol in bought_symbol_list:
+        #     uuid, available_qty = upbit.check_loss_sell(symbol, -3)
+        #     if uuid and available_qty > 0:
+        #         ret = upbit.sell_current_price(symbol, available_qty)
+        #         time.sleep(1)
+        #         state = ret.get('state', '')
+        #         _uuid = ret.get('uuid')
+        #         if state == 'wait':
+        #             cancel = upbit.order_cancel(_uuid)
+        #             if cancel is True:
+        #                 log(f'미체결로 주문취소 => {cancel}')
+        #         elif state == 'done':
+        #             log(f'{symbol} 손절매 결과 ')
+        #             loss_sell_list.append(_uuid)
+        #     # upbit.trailing_stop(symbol)
+        #     # time.sleep(0.1)
+        #     sell_after_logic(loss_sell_list)
+        #     time.sleep(0.5)
+
+# 텔레그램 수익률 보고!
+# if now_tm.minute == 0 and now_tm.second <= 7:
+#     send_coin_bot()
+#     time.sleep(2)

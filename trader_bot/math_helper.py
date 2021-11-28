@@ -233,7 +233,7 @@ def calc_prev_volatility(symbol: str) -> float:
     return round((prev_range / open) * 100, 1)
 
 
-def calc_ewm_volatility(symbol: str, days: int):
+def calc_ema_volatility(symbol: str, days: int):
     """
      전일 변동성 구하기 (지수이동평균)
      (고가 - 저가) / 시가 * 100
@@ -323,18 +323,22 @@ def calc_noise_ma_by(symbol: str, days: int = 20) -> float:
     :return:
     """
     try:
-        ohlcv: DataFrame = pyupbit.get_ohlcv(symbol)
-        if len(ohlcv) > 0:
-            # print(ohlcv.tail())
+        ohlcv: DataFrame = pyupbit.get_ohlcv(symbol, count=days)
+        # print(ohlcv.tail())
+        if not ohlcv.empty:
             # 당일 노이즈 값
-            noise: Series = 1 - abs(ohlcv['open'] - ohlcv['close']) / (ohlcv['high'] - ohlcv['low'])
-            # print(noise.tail(days))
+            if days == 1:
+                curr_price = pyupbit.get_current_price(symbol)
+                # print(curr_price)
+                noise: Series = 1 - abs(ohlcv['open'] - curr_price) / (ohlcv['high'] - ohlcv['low'])
+            else:
+                noise: Series = 1 - abs(ohlcv['open'] - ohlcv['close']) / (ohlcv['high'] - ohlcv['low'])
             # return noise[-1]
-            MA_noise = noise.rolling(window=days).mean()
+            # MA_noise = noise.rolling(window=days).mean()
             EMA_noise = noise.ewm(days).mean()
             # print('MA: ', MA_noise[-1])
             # print('EMA', EMA_noise[-1])
-            return EMA_noise[-1]
+            return round(EMA_noise[-1], 3)
     except Exception as E:
         msg = f'calc_noise_ma_by() 예외 발생. {str(E)}'
         print(msg)
@@ -342,7 +346,39 @@ def calc_noise_ma_by(symbol: str, days: int = 20) -> float:
         return 0.5
 
 
-def find_bull_market_list() -> list:
+def calc_ma(symbol: str, days: int = 3) -> float:
+    """
+    단순 이동평균 구하기 (당일 포함)
+    :param symbol:
+    :param days:
+    :return:
+    """
+    ohlcv: DataFrame = pyupbit.get_ohlcv(symbol, count=days)
+    if len(ohlcv) > 0:
+        close = ohlcv['close']
+        # print(close.tail())
+        MA = close.rolling(window=days).mean()
+        # print(MA)
+        return MA[-1]
+
+
+def calc_ema(symbol: str, days: int = 3) -> float:
+    """
+    지수 이동평균 구하기 (당일 포함)
+    :param symbol:
+    :param days:
+    :return:
+    """
+    ohlcv: DataFrame = pyupbit.get_ohlcv(symbol, count=days)
+    if len(ohlcv) > 0:
+        close = ohlcv['close']
+        # print(close.tail())
+        MA = close.ewm(days).mean()
+        # print(MA)
+        return MA[-1]
+
+
+def find_bull_market_list(R=0.5) -> list:
     """
     상승코인 찾기
      1) 현재가격 > EMA3 OR EMA5
@@ -350,30 +386,32 @@ def find_bull_market_list() -> list:
     :return:
     """
     bull_coins = []
-    R = 0.5
-    # for symbol in pyupbit.get_tickers(fiat='KRW'):
-    #     try:
-    #         curr_price = pyupbit.get_current_price(symbol)
-    #         target_price = calc_target_price(symbol, R)
-    #         # MA3 = calc_fix_moving_average_by(ticker, 3)
-    #         # MA5 = calc_fix_moving_average_by(ticker, 5)
-    #         # curr_noise = get_current_noise(ticker)
-    #         # noise_ma3 = calc_fix_noise_ma_by(ticker, 3)
-    #         # noise_ma5 = calc_fix_noise_ma_by(ticker, 5)
-    #         # if curr_price > MA3 and curr_price > MA5 \
-    #         #         and curr_price > target_price and curr_noise < 0.3 \
-    #         #         and noise_ma3 < 0.55 and noise_ma5 < 0.55:
-    #         #     print(f'상승 불코인: {ticker}')
-    #         # bull_coins.append(symbol)
-    # except Exception as E:
-    # print(str(E))
-    #
-# return bull_coins
+    for symbol in pyupbit.get_tickers(fiat='KRW'):
+        try:
+            curr_price = pyupbit.get_current_price(symbol)
+            target_price = calc_target_price(symbol, R)
+            MA3 = calc_ma(symbol, 3)
+            MA5 = calc_ma(symbol, 5)
+            curr_noise = calc_noise_ma_by(symbol, 1)
+            noise_ma3 = calc_noise_ma_by(symbol, 3)
+            noise_ma5 = calc_noise_ma_by(symbol, 5)
+            if curr_price > MA3 and curr_price > MA5 \
+                    and curr_price > target_price and curr_noise < 0.3 \
+                    and noise_ma3 < 0.55 and noise_ma5 < 0.55:
+                print(f'상승 불코인: {symbol}')
+                bull_coins.append(symbol)
+            time.sleep(1)
+        except Exception as E:
+            print(str(E))
+    return bull_coins
+
+
 
 if __name__ == '__main__':
-    symbol = 'KRW-XRP'
-    # target_price = calc_target_price(symbol)
-    # print(f'{symbol} target_price: {target_price:,}')
+    # symbol = 'KRW-XRP'
+    symbol = 'KRW-BTC'
+    target_price = calc_target_price(symbol)
+    print(f'{symbol} target_price: {target_price:,}')
     # print(calc_prev_range(symbol))
     # print(calc_today_range(symbol))
     # print(calc_ma_range(symbol, 5))
@@ -387,9 +425,8 @@ if __name__ == '__main__':
     # atr = calc_atr(symbol, 14)
     # print(atr)
     # print(get_current_atr(symbol, 14))
-
-    for symbol in pyupbit.get_tickers(fiat='KRW'):
-        noise = calc_noise_ma_by(symbol, 1)
-        if noise <= 0.3:
-            print(f'노이즈 적은 종목 => {symbol} {noise}')
-        time.sleep(0.2)
+    # print(calc_noise_ma_by(symbol, 1))
+    # print(calc_noise_ma_by(symbol, 3))
+    # print(calc_noise_ma_by(symbol, 5))
+    # print('MA: ', calc_ma(symbol, 5))
+    # print('EMA: ', calc_ema(symbol, 5))
