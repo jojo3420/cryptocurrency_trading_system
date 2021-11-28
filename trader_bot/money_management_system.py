@@ -2,6 +2,7 @@ from pandas import DataFrame
 # from common.date_util import get_today
 from datetime import datetime, timedelta
 import pyupbit
+# from .math_helper import calc_prev_volatility, get_current_atr
 
 
 def calc_position_size_by_volatility(symbol: str, days: int, target_loss_amount=5000):
@@ -71,6 +72,10 @@ def calc_position_size_by_loss_percent(symbol, loss_percent=0.1, target_loss_amo
    2) 손실률에 따른 투자금액 조절
     투자금액: 1회 투자 손실금액 / 손실률(%)
 
+    :return stock_cnt: 주식수량
+    :return position_amount: 투자금액
+    :return stop_loss_price: 손절매 가격
+
     ex)  500 / 0.2
 
     """
@@ -93,9 +98,55 @@ def calc_position_size_by_loss_percent(symbol, loss_percent=0.1, target_loss_amo
         return 0, 0, 0
 
 
+# def calc_position_size_by_target(symbol: str, portfolio, total_cash, target_volatility=2):
+#     """
+#     자금 관리: 진입 포지션 규모를 목표한(나의 허용 가능) 변동성과 전일 변동성 기준으로 계산
+#     (목표변동성 / 전일변동성) / 코인종목수
+#     (2% / 10%) / 5
+#     :param target_volatility:
+#     :return qty: 수량
+#     :return position_amount: 투자 금액
+#     :return stop_loss_price: 손절 가격
+#     """
+#     prev_volatility = calc_prev_volatility(symbol)
+#     print(f'이전일 변동성: {prev_volatility}%')
+#     size = (target_volatility / prev_volatility) / len(portfolio)
+#     position_size = total_cash * size  # 1종목당 사용할 포지션 규모금액
+#     curr_price = pyupbit.get_current_price(symbol)
+#     qty = round(position_size / curr_price, 4)
+#     return qty
+
+
+# def calc_position_size_turtle(symbol: str, days: int, total_cash: int, minimum_amount: int) -> int:
+#     """
+#     터틀 트레이딩 자금 방식에 의한 매수(진입) 수량 구하기
+#      변동성 ATR 기준으로 수량 계산
+#       - 낮은 변동성에는 많은 수량
+#       - 높은 변동성에는 낮은 수량
+#
+#       A: 총 자본에서 감수할 손실금액: 총자본의 1% ~ 2%
+#       B: 계약위험: 1N *  거래단위
+#       Unit = A / B
+#     """
+#     ATR = get_current_atr(symbol, days=days)
+#     curr_price = pyupbit.get_current_price(symbol)
+#     if ATR and curr_price:
+#         NN = ATR + ATR
+#         transaction_unit = round(minimum_amount / curr_price, 8)  # 최소주문수량
+#         # print(f'{symbol} 최소주문수량: {transaction_unit:.8f}')
+#         risk_take = total_cash * 0.01  # 총자본에서 허용할 리스크 금액
+#         # print(f'리스크 감수 금액: {risk_take:,}')
+#         contract_risk = round(ATR * transaction_unit, 1)  # 거래리스크
+#         # print(f'거래리스크: {contract_risk:,}')
+#         if risk_take and contract_risk:
+#             unit = round(risk_take / contract_risk, 4)
+#             return unit
+#         return 0
+
+
 if __name__ == '__main__':
     symbol = 'KRW-FLOW'
-    # symbol = 'KRW-STPT'
+    symbol = 'KRW-STPT'
     days = 20
     cnt, investing_amount, loss_price = calc_position_size_by_volatility(symbol, days, target_loss_amount=5000)
     print(f'{symbol} 변동성 고려한 손실금액 고정한 포지션규모 계산')

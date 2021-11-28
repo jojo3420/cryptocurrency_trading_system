@@ -111,7 +111,7 @@ def save_transaction_history(data_dict: dict) -> None:
             stop_loss_price = data_dict.get('stop_loss_price', 0)
             mutation_db(sql, (uuid, sub_uuid, type_str, today, symbol,
                               position, price, quantity, target_price, stop_loss_price,
-                              fee, R, funds, exchange_name)
+                              R, fee, funds, exchange_name)
                         )
         elif position == 'ask':  # 매도 거래
             yield_ratio = data_dict.get('yield', 0)

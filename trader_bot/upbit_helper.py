@@ -608,6 +608,27 @@ def calc_yield(entry_price: int, ask_price: int) -> float:
         return round(coin_yield, 3)
 
 
+def get_bull_bear_coin_cnt():
+    """
+    상승코인수, 하락코인수 조회
+    어제 종가와 현재가격 비교하여 어제종가 < 현재가격 이면 상승
+    :return:
+    """
+    symbols = pyupbit.get_tickers('KRW')
+    bull_cnt, bear_cnt = 0, 0
+    for symbol in symbols:
+        # print(symbol)
+        prev_close = get_prev_close(symbol)
+        curr_close = pyupbit.get_current_price(symbol)
+        # print(prev_close, curr_close)
+        if curr_close > prev_close:
+            bull_cnt += 1
+        else:
+            bear_cnt += 1
+        time.sleep(0.5)
+    return bull_cnt, bear_cnt
+
+
 #
 # def after_buy_order_etc(self, ret, entry_qty):
 #     uuid = ret.get('uuid')
@@ -686,7 +707,10 @@ if __name__ == '__main__':
     # print(r)
 
     # print('매수주문 대기 상태: ', upbit.get_order_state('01e6c4f0-4e9c-4616-a6a9-b36437ed64e0'))
-    print('매도주문 상태: ', upbit.get_order_state('0cf50e9c-0af3-46b0-bf65-19c70058e302'))
+    # print('매도주문 상태: ', upbit.get_order_state('0cf50e9c-0af3-46b0-bf65-19c70058e302'))
     # print('주문 상태: ', upbit.get_order_state(symbol))
     # df = pyupbit.get_ohlcv(symbol, count=20)
     # print(df)
+
+    # print(upbit.get_coin_balance('KRW-ETH'))
+    print(get_bull_bear_coin_cnt())

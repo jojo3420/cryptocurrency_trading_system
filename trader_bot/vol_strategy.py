@@ -18,7 +18,7 @@ from money_management_system import *
 class BreakVolatility:
     def __init__(self, upbit):
         self.upbit = upbit
-        self.find_bull_toggle = True
+        self.find_bull_toggle = False
         self.bull_coins = []
         self.tr_history = {}
 
@@ -51,6 +51,77 @@ class BreakVolatility:
             except Exception as E:
                 print(str(E))
 
+    def buy_coin(self, symbol, R):
+        """
+        코인 매수하기
+        :param upbit: 매수모듈
+        :param symbol: 매수할 코인
+        :param R: 윌리엄스 k값
+        :return:
+        """
+        available_cash, _ = self.upbit.get_cash_balance()
+        allowable_loss_amount = int(available_cash * 0.01)
+        # print(f'{symbol} 허용가능한 손실금액: {target_loss_amount}')
+        quantity, position_amount, stop_loss_price = calc_position_size_by_loss_percent(symbol, allowable_loss_percent,
+                                                                                        target_loss_amount=allowable_loss_amount)
+        if quantity > 0:
+            # log(f'{symbol} 수량: {quantity}, 진입금액: {position_amount:,.0f} 스탑로스: {stop_loss_price}')
+            target_price = calc_target_price(symbol, R)
+            curr_price = pyupbit.get_current_price(symbol)
+            if target_price and curr_price and curr_price > target_price:
+                log(f'변동성 돌파됨 {symbol}')
+                ret = self.upbit.buy_current_price(symbol, quantity)
+                uuid = ret.get('uuid', None)
+                log(f'매수주문 => {uuid}')
+                time.sleep(1)
+                self.tr_history[symbol] = {'target_price': target_price, 'R': R, 'position_amount': position_amount,
+                                           'stop_loss_price': stop_loss_price, 'uuid': uuid,
+                                           'allowable_loss_amount': allowable_loss_amount,
+                                           }
+                self.check_bid_order(uuid, target_price, R)
+            else:
+                log(f'{symbol} 변동성 돌파 실패! (주문X)')
+        # else:
+        #     log(f'주문가능 수량 없음: {symbol}')
+
+    def check_stop_loss(self, bought_symbol_list):
+        """
+        종목별 현재 가격과 손절 가격 비교하여 청산 처리
+        :param bought_symbol_list:
+        :return:
+        """
+        uuid_li = []
+        for sym in bought_symbol_list:
+            if self.tr_history.get(sym):
+                stop_loss_price = self.tr_history[sym].get('stop_loss_price')
+            else:
+                stop_loss_price = get_stop_loss_price_by(sym, 'bid')
+            curr_price = pyupbit.get_current_price(sym)
+            _ticker, available_qty, _used = self.upbit.get_coin_balance(sym)
+            if curr_price and stop_loss_price and stop_loss_price >= curr_price:
+                ret = self.upbit.sell_current_price(sym, available_qty)
+                log(f'손절매 매도: {sym}')
+                log(ret)
+                uuid = ret.get('uuid', '')
+                uuid_li.append(uuid)
+            else:
+                # 손실금액 출력 확인
+                if self.tr_history.get(sym):
+                    entry_price = self.tr_history[sym].get('entry_price')
+                    allowable_loss_amount = self.tr_history[sym].get('allowable_loss_amount')
+                else:
+                    available_cash, _ = self.upbit.get_cash_balance()
+                    allowable_loss_amount = int(available_cash * 0.01)
+                    _uuid = get_entry_order_uuid(sym, is_sell=False)
+                    entry_price = get_entry_price(_uuid)
+                log(f'진입가격: {entry_price:,.0f} 손절가: {stop_loss_price:,.0f} 현재가: {curr_price:,.0f}')
+                log(f'허용 가능한 손실금액: {allowable_loss_amount:,.0f}원')
+                diff = curr_price - entry_price
+                log(f'{sym} 손실금액: {(available_qty + _used) * diff:,.1f}원')
+
+            time.sleep(0.5)
+        self.sell_after_logic(uuid_li)
+
     def check_bid_order(self, uuid: str, target_price, R=0.5):
         """
         체결 상태 확인 => 매수
@@ -63,6 +134,7 @@ class BreakVolatility:
             b_state = b_ret.get('state', '')
             if b_state == 'wait':
                 cancel = self.upbit.order_cancel(uuid)
+                self.tr_history[symbol] = None
                 log(f'미체결 주문 취소하기: ({cancel}) ')
             elif b_state == 'done':
                 trades_count = b_ret.get('trades_count', 0)
@@ -105,39 +177,6 @@ class BreakVolatility:
                 log('*** 주문 상태 확인 필요 ***')
                 print(b_ret)
 
-    def buy_coin(self, symbol, R):
-        """
-        코인 매수하기
-        :param upbit: 매수모듈
-        :param symbol: 매수할 코인
-        :param R: 윌리엄스 k값
-        :return:
-        """
-        available_cash, _ = self.upbit.get_cash_balance()
-        allowable_loss_amount = int(available_cash * 0.01)
-        # print(f'{symbol} 허용가능한 손실금액: {target_loss_amount}')
-        quantity, position_amount, stop_loss_price = calc_position_size_by_loss_percent(symbol, allowable_loss_percent,
-                                                                                        target_loss_amount=allowable_loss_amount)
-        if quantity > 0:
-            # log(f'{symbol} 수량: {quantity}, 진입금액: {position_amount:,.0f} 스탑로스: {stop_loss_price}')
-            target_price = calc_target_price(symbol, R)
-            curr_price = pyupbit.get_current_price(symbol)
-            if target_price and curr_price and curr_price > target_price:
-                log(f'변동성 돌파됨 {symbol}')
-                ret = self.upbit.buy_current_price(symbol, quantity)
-                uuid = ret.get('uuid', None)
-                log(f'매수주문 => {uuid}')
-                time.sleep(1)
-                self.tr_history.setdefault({'target_price': target_price, 'R': R, 'position_amount': position_amount,
-                                            'stop_loss_price': stop_loss_price, 'uuid': uuid,
-                                            'allowable_loss_amount': allowable_loss_amount,
-                                            }, {})
-                self.check_bid_order(uuid, target_price, R)
-            else:
-                log(f'{symbol} 변동성 돌파 실패! (주문X)')
-        # else:
-        #     log(f'주문가능 수량 없음: {symbol}')
-
     def sell_after_logic(self, uuid_list: list, sleep_time=1):
         """
         매도 주문후 로직 처리
@@ -158,21 +197,21 @@ class BreakVolatility:
             _, ticker = symbol.split('-')
             time.sleep(sleep_time)
             if state == 'done':
-                _, qty, used = self.upbit.get_coin_balance(ticker)
-                if qty == 0 and used == 0:
+                balance = self.upbit.get_coin_balance(ticker)
+                if len(balance) == 0:
                     update_bought_list(symbol)
                 for sub_ret in trades:
                     sub_uuid = sub_ret.get('uuid')
                     ask_price = sub_ret.get('price')
                     quantity = sub_ret.get('volume')
                     funds = sub_ret.get('funds')
-                    entry_price = get_entry_price(sub_uuid)
-                    yields = calc_yield(entry_price=entry_price, ask_price=ask_price)
+                    # entry_price = get_entry_price(b_uuid)  # 매수한 거래내역 uuid 필요한데..
+                    # yields = calc_yield(entry_price, ask_price)
                     data_dict = {
                         'position': 'ask', 'symbol': symbol,
                         'uuid': uuid, 'sub_uuid': sub_uuid,
                         'price': ask_price, 'quantity': quantity,
-                        'yield': yields, 'fee': paid_fee,
+                        'yield': 0, 'fee': paid_fee,
                         'funds': funds,
                     }
                     log(data_dict)
@@ -181,44 +220,6 @@ class BreakVolatility:
                 cancel = self.upbit.order_cancel(uuid)
                 log(f'{symbol} 주문 미체결로 취소처리: {cancel}')
             time.sleep(0.5)
-
-    def check_stop_loss(self, bought_symbol_list):
-        """
-        종목별 현재 가격과 손절 가격 비교하여 청산 처리
-        :param bought_symbol_list:
-        :return:
-        """
-        # print(bought_symbol_list)
-        uuid_li = []
-        for sym in bought_symbol_list:
-            _uuid = get_entry_order_uuid(sym, is_sell=False)
-            entry_price = get_entry_price(_uuid)
-            if self.tr_history[sym].get('stop_loss_price'):
-                stop_loss_price = self.tr_history[sym].get('stop_loss_price')
-            else:
-                stop_loss_price = get_stop_loss_price_by(sym, 'bid')
-            curr_price = pyupbit.get_current_price(sym)
-            _ticker, available_qty, _used = self.upbit.get_coin_balance(sym)
-            if curr_price and stop_loss_price and stop_loss_price > curr_price:
-                ret = self.upbit.sell_current_price(sym, available_qty)
-                log(f'손절매 매도: {sym}')
-                log(ret)
-                uuid = ret.get('uuid', '')
-                uuid_li.append(uuid)
-            else:
-                if self.tr_history.get(sym):
-                    entry_price = self.tr_history.get(sym).get('entry_price')
-                    allowable_loss_amount = self.tr_history.get(sym).get('allowable_loss_amount')
-                else:
-                    available_cash, _ = self.upbit.get_cash_balance()
-                    allowable_loss_amount = int(available_cash * 0.01)
-                log(f'허용 가능한 손실금액: {allowable_loss_amount:,.0f}원')
-                diff = curr_price - entry_price
-                log(f'{sym} 손실금액: {(available_qty + _used) * diff:,.1f}원')
-                log(f'진입가격: {entry_price:,.0f} 손절가: {stop_loss_price:,.0f}')
-
-            time.sleep(0.5)
-        self.sell_after_logic(uuid_li)
 
 
 if __name__ == '__main__':
@@ -236,8 +237,8 @@ if __name__ == '__main__':
                 break
             today = datetime.now()
             # 전일 코인자산 청산 시간
-            start_sell_tm = today.replace(hour=9, minute=1, second=0, microsecond=0)
-            end_sell_tm = today.replace(hour=9, minute=6, second=0, microsecond=0)
+            start_sell_tm = today.replace(hour=8, minute=30, second=0, microsecond=0)
+            end_sell_tm = today.replace(hour=8, minute=35, second=0, microsecond=0)
             # 트레이딩 시간
             start_trading_tm = today.replace(hour=0, minute=0, second=1, microsecond=0)
             end_trading_tm = today.replace(hour=23, minute=55, second=0, microsecond=0)
@@ -267,8 +268,10 @@ if __name__ == '__main__':
             if now_tm.minute == 0 and now_tm.second <= 7:
                 msg = '텔레그램 수익률 보고!'
                 send_coin_bot(msg)
-                strategy.find_bull_toggle = True
-                strategy.find_bull_market_list()
+                bull_cnt, bear_cnt = get_bull_bear_coin_cnt()
+                if bull_cnt > bear_cnt:
+                    strategy.find_bull_toggle = True
+                    strategy.find_bull_market_list()
 
             print('-' * 150)
             time.sleep(1)
