@@ -301,26 +301,31 @@ class UpbitHelper:
             balance_list = []
             for balance in total_balance:
                 # print(balance)
-                _ticker = balance.get('currency')  # KRW, XRP, BTC ...
+                currency = balance.get('currency')  # KRW, XRP, BTC ...
                 available = balance.get('balance')
                 used = balance.get('locked')
+                if '-' in ticker:
+                    _symbol = ticker.split('-')[1]
+                else:
+                    _symbol = ticker
+
                 # print(type(balance))
                 if self.debug_mode:
-                    log(f'_ticker: {_ticker}, available: {float(available):,.2f}, used: {used}')
+                    log(f'currency: {currency}, available: {float(available):,.2f}, used: {used}')
 
-                if _ticker == 'KRW':
+                if currency == 'KRW':
                     available = int(float(available))
                     used = int(float(used))
                 else:
                     available = float(available)
                     used = float(used)
 
-                element: tuple = (_ticker, available, used)
-                if ticker == 'KRW' and ticker == _ticker:
+                element: tuple = (currency, available, used)
+                if ticker == 'KRW' and currency == _symbol:
                     return element
-                if ticker != 'ALL' and ticker == _ticker:
+                elif ticker != 'ALL' and currency == _symbol:
                     return element
-                elif ticker == 'ALL' and _ticker != 'KRW':
+                elif ticker == 'ALL' and currency != 'KRW':
                     balance_list.append(element)
             return balance_list
         except Exception as ex:

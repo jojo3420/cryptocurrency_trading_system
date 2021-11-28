@@ -187,16 +187,16 @@ class BreakVolatility:
                                                                         entry_price=entry_price)
             curr_price = pyupbit.get_current_price(sym)
             # print(f'{sym} 현재가: {curr_price:,.0f} 손절가: {stop_loss_price:,.0f}')
+            _ticker, available_qty, _used = self.upbit.get_coin_balance(sym)
             if curr_price and stop_loss_price and stop_loss_price > curr_price:
-                _ticker, available_qty, _used = self.upbit.get_coin_balance(sym)
                 ret = self.upbit.sell_current_price(sym, available_qty)
                 log(f'손절매 매도: {sym}')
                 log(ret)
                 uuid = ret.get('uuid', '')
                 uuid_li.append(uuid)
             else:
-                yields = calc_yield(entry_price, curr_price)
-                log(f'{sym}: {yields:.2f}%')
+                diff = curr_price - entry_price
+                log(f'{sym} 손실금액: {available_qty * diff:,.1f}원')
 
             time.sleep(0.5)
         self.sell_after_logic(uuid_li)
