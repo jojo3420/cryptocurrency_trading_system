@@ -378,35 +378,6 @@ def calc_ema(symbol: str, days: int = 3) -> float:
         return MA[-1]
 
 
-def find_bull_market_list(R=0.5) -> list:
-    """
-    상승코인 찾기
-     1) 현재가격 > EMA3 OR EMA5
-     2) 노이즈값 0.55 미만
-    :return:
-    """
-    bull_coins = []
-    for symbol in pyupbit.get_tickers(fiat='KRW'):
-        try:
-            curr_price = pyupbit.get_current_price(symbol)
-            target_price = calc_target_price(symbol, R)
-            MA3 = calc_ma(symbol, 3)
-            MA5 = calc_ma(symbol, 5)
-            curr_noise = calc_noise_ma_by(symbol, 1)
-            noise_ma3 = calc_noise_ma_by(symbol, 3)
-            noise_ma5 = calc_noise_ma_by(symbol, 5)
-            if curr_price > MA3 and curr_price > MA5 \
-                    and curr_price > target_price and curr_noise < 0.3 \
-                    and noise_ma3 < 0.55 and noise_ma5 < 0.55:
-                print(f'상승 불코인: {symbol}')
-                bull_coins.append(symbol)
-            time.sleep(1)
-        except Exception as E:
-            print(str(E))
-    return bull_coins
-
-
-
 if __name__ == '__main__':
     # symbol = 'KRW-XRP'
     symbol = 'KRW-BTC'

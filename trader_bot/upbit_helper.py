@@ -254,8 +254,8 @@ class UpbitHelper:
                     else:
                         uuid = ret.get('uuid')
                         uuid_list.append(uuid)
-                time.sleep(0.4)
-            time.sleep(0.2)
+                time.sleep(0.5)
+            time.sleep(0.1)
 
     def order_cancel(self, uuid: str) -> bool:
         """

@@ -57,7 +57,7 @@ def calc_position_size_by_volatility(symbol: str, days: int, target_loss_amount=
         return 0, 0, 0
 
 
-def calc_position_size_by_loss_percent(symbol, loss_percent=0.1, target_loss_amount=5000):
+def calc_position_size_by_loss_percent(symbol, loss_percent=0.1, target_loss_amount=5000, entry_price=None):
     """
     목표 손실 금액을 고정하여 포지션 규모 계산
 
@@ -83,7 +83,10 @@ def calc_position_size_by_loss_percent(symbol, loss_percent=0.1, target_loss_amo
     stock_cnt = round(position_amount // curr_adj_price, 4)
     if stock_cnt > 0:
         per_loss = target_loss_amount // stock_cnt
-        stop_loss_price = curr_adj_price - per_loss
+        if entry_price is None:
+            stop_loss_price = curr_adj_price - per_loss
+        else:
+            stop_loss_price = entry_price - per_loss
         return stock_cnt, position_amount, stop_loss_price
     else:
         # print(f'{symbol} 수량이 부족. {stock_cnt}')
