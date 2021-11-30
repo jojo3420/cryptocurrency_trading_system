@@ -227,6 +227,27 @@ class UpbitHelper:
         return ask_price
         # return self.sell(symbol, quantity, ask_price)
 
+    def sell_fok(self, symbol):
+        """  주문 즉시 전략 체결되지 않으면 주문 자체를 취소
+            Fill or Kill
+        """
+        pass
+
+    def sell_ioc(self, symbol, qty, delay=1) -> dict:
+        """ 주문 즉시 체결후 남은 수량 취소
+            Intermidiate or cancel order
+        """
+        ret: dict = self.sell_current_price(symbol, qty)
+        time.sleep(delay)
+        print(ret)
+        state = ret.get('state')
+        if state == 'done':
+            return ret
+        else:
+            uuid = ret.get('uuid')
+            self.order_cancel(uuid)
+            return {}
+
     def sell_all(self) -> list:
         """
         코인 잔고 모두 청산: 현재가 매도
@@ -235,16 +256,14 @@ class UpbitHelper:
         :return:
         """
         uuid_list = []
-        while True:
-            coin_balances = self.get_coin_balance('ALL')
-            if len(coin_balances) == 0:
-                return uuid_list
-            # 청산 로직
-            for ticker, available_qty, used in coin_balances:
-                symbol = f'KRW-{ticker}'
-                log(f'{symbol} 코인 청산 주문!')
-                if available_qty > 0:
-                    ret: dict = self.sell_current_price(symbol, available_qty)
+        coin_balances = self.get_coin_balance('ALL')
+        # 청산 로직
+        for ticker, available_qty, used in coin_balances:
+            symbol = f'KRW-{ticker}'
+            log(f'{symbol} 코인 청산 주문!')
+            if available_qty > 0:
+                ret = self.sell_ioc(symbol, available_qty)
+                if ret.get('uuid'):
                     # print(f'sell_all ret: {ret}')
                     err_msg = ret.get('err_msg', '')
                     state = ret.get('state', '')
@@ -252,10 +271,9 @@ class UpbitHelper:
                     if err_msg:
                         log(err_msg)
                     else:
-                        uuid = ret.get('uuid')
-                        uuid_list.append(uuid)
-                time.sleep(0.5)
-            time.sleep(0.1)
+                        uuid_list.append(ret.get('uuid'))
+            time.sleep(0.5)
+        return uuid_list
 
     def order_cancel(self, uuid: str) -> bool:
         """
@@ -289,10 +307,10 @@ class UpbitHelper:
             print(error)
             return False
 
-    def get_coin_balance(self, ticker="ALL") -> dict or tuple:
+    def get_coin_balance(self, ticker="ALL") -> tuple:
         """
         잔고조회 하기
-        :param ticker: 'ALL' 전체잔고, 특정티커: 티커잔고만 조회
+        :param ticker: 'ALL' 전체잔고, 특정티커: 티커 잔고만 조회(BTC, ETH, ADA, XRP, 형식)
         :return: [tuple, tuple, tuple...] OR tuple
         ex) XRP, 10, 5
         """
@@ -301,7 +319,7 @@ class UpbitHelper:
             balance_list = []
             for balance in total_balance:
                 # print(balance)
-                currency = balance.get('currency')  # KRW, XRP, BTC ...
+                currency = balance.get('currency')  # KRW, XRP, BTC, ADA, XRP ...
                 available = balance.get('balance')
                 used = balance.get('locked')
                 if '-' in ticker:
@@ -327,7 +345,11 @@ class UpbitHelper:
                     return element
                 elif ticker == 'ALL' and currency != 'KRW':
                     balance_list.append(element)
-            return balance_list
+
+            if len(balance_list) > 0:
+                return balance_list
+            return element
+
         except Exception as ex:
             traceback.print_exc()
             msg = f'get_coin_balance() 예외발생 {str(ex)}'

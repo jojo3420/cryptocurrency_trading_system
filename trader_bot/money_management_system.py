@@ -1,8 +1,4 @@
-from pandas import DataFrame
-# from common.date_util import get_today
-from datetime import datetime, timedelta
 import pyupbit
-# from .math_helper import calc_prev_volatility, get_current_atr
 
 
 def calc_position_size_by_volatility(symbol: str, days: int, target_loss_amount=5000):
@@ -47,15 +43,15 @@ def calc_position_size_by_volatility(symbol: str, days: int, target_loss_amount=
     # print(f'변동성 범위: {volatility_range}')
     curr_adj_close = round(adj_close.iloc[-1], 3)
     # print(f'현재가격: {curr_adj_close}')
-    stock_cnt = target_loss_amount // volatility_range
-    if stock_cnt > 0:
-        position_amount = round(curr_adj_close * stock_cnt, 2)
-        per_loss = target_loss_amount // stock_cnt
+    qty = target_loss_amount // volatility_range
+    if qty > 0:
+        position_amount = round(curr_adj_close * qty, 2)
+        per_loss = target_loss_amount // qty
         stop_loss_price = curr_adj_close - per_loss
-        return stock_cnt, position_amount, stop_loss_price
-    else:
-        print(f'{symbol} 수량이 부족합니다. {stock_cnt}')
-        return 0, 0, 0
+        # loss_amount = (curr_adj_close - stop_loss_price) * qty
+        return qty, stop_loss_price, position_amount
+
+    return 0, 0, 0
 
 
 def calc_position_size_by_loss_percent(symbol, loss_percent=0.1, target_loss_amount=5000, entry_price=None):
@@ -72,30 +68,32 @@ def calc_position_size_by_loss_percent(symbol, loss_percent=0.1, target_loss_amo
    2) 손실률에 따른 투자금액 조절
     투자금액: 1회 투자 손실금액 / 손실률(%)
 
-    :return stock_cnt: 주식수량
-    :return position_amount: 투자금액
+    :return qty: 주식수량
     :return stop_loss_price: 손절매 가격
+    :return position_amount: 투자금액
+    :return loss_amount: 손실금액
 
     ex)  500 / 0.2
 
     """
     days = 20
     df = pyupbit.get_ohlcv(symbol, count=days)
-    adj_close = df['close']
-    curr_adj_price = round(adj_close[-1], 3)
-    # print(f'{symbol} 현재가격: {curr_adj_price}')
-    position_amount = round(target_loss_amount / loss_percent, 2)
-    stock_cnt = round(position_amount // curr_adj_price, 4)
-    if stock_cnt > 0:
-        per_loss = target_loss_amount // stock_cnt
-        if entry_price is None:
-            stop_loss_price = curr_adj_price - per_loss
-        else:
-            stop_loss_price = entry_price - per_loss
-        return stock_cnt, position_amount, stop_loss_price
-    else:
-        # print(f'{symbol} 수량이 부족. {stock_cnt}')
-        return 0, 0, 0
+    if df is not None:
+        adj_close = df['close']
+        curr_adj_price = round(adj_close[-1], 3)
+        # print(f'{symbol} 현재가격: {curr_adj_price}')
+
+        position_amount = round(target_loss_amount / loss_percent, 2)
+        qty = round(position_amount // curr_adj_price, 4)
+        if qty > 0:
+            per_loss = target_loss_amount // qty
+            if entry_price is None:
+                stop_loss_price = curr_adj_price - per_loss
+            else:
+                stop_loss_price = entry_price - per_loss
+
+            return qty, stop_loss_price, position_amount
+    return 0, 0, 0
 
 
 # def calc_position_size_by_target(symbol: str, portfolio, total_cash, target_volatility=2):
@@ -147,13 +145,14 @@ def calc_position_size_by_loss_percent(symbol, loss_percent=0.1, target_loss_amo
 if __name__ == '__main__':
     symbol = 'KRW-FLOW'
     symbol = 'KRW-STPT'
+    symbol = 'KRW-ADA'
     days = 20
-    cnt, investing_amount, loss_price = calc_position_size_by_volatility(symbol, days, target_loss_amount=5000)
+    cnt, loss_price, investing_amount = calc_position_size_by_volatility(symbol, days, target_loss_amount=2000)
     print(f'{symbol} 변동성 고려한 손실금액 고정한 포지션규모 계산')
     print(f'수량: {cnt}, 투자 금액: {investing_amount:,.0f}')
     print(f'손절가격: {loss_price:,.2f}')
     print('-' * 80)
     print('변동성 고려하지 않는 손실금액 고정 포지션규모 계산')
-    cnt, p_amount, loss_price = calc_position_size_by_loss_percent(symbol, target_loss_amount=5000)
+    cnt, loss_price, p_amount = calc_position_size_by_loss_percent(symbol, loss_percent=0.04, target_loss_amount=2000)
     print(f'수량: {cnt}, 투자 규모: {p_amount:,.0f}')
     print(f'손절가격: {loss_price}')

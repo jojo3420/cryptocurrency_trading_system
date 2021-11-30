@@ -99,21 +99,23 @@ def save_transaction_history(data_dict: dict) -> None:
                   ' (' \
                   ' order_no, sub_uuid, type, date, ticker, ' \
                   ' position, price, quantity, target_price, stop_loss_price, ' \
-                  ' R, fee, transaction_krw_amount, exchange_name' \
+                  ' R, fee, transaction_krw_amount, exchange_name, allowable_loss_amount' \
                   ' ) ' \
                   ' VALUES (' \
                   ' %s, %s, %s, %s, %s,' \
                   ' %s, %s, %s, %s, %s,' \
-                  ' %s, %s, %s, %s' \
+                  ' %s, %s, %s, %s, %s' \
                   ')'
             target_price = data_dict.get('target_price', 0)
             R = data_dict.get('R', 0.5)
             stop_loss_price = data_dict.get('stop_loss_price', 0)
+            allowable_loss_amount = data_dict.get('allowable_loss_amount', 0)
             mutation_db(sql, (uuid, sub_uuid, type_str, today, symbol,
                               position, price, quantity, target_price, stop_loss_price,
-                              R, fee, funds, exchange_name)
+                              R, fee, funds, exchange_name, allowable_loss_amount)
                         )
         elif position == 'ask':  # 매도 거래
+            print('매도거래 =>', data_dict)
             yield_ratio = data_dict.get('yield', 0)
             sql = 'INSERT INTO coin_transaction_history ' \
                   ' (order_no, type, date, ticker, position, ' \
@@ -161,6 +163,15 @@ def get_transaction_history(ticker: str, uuid: str) -> tuple:
         return temp_t[0]
 
 
+def get_transaction_history_by_day(day, position):
+    sql = 'SELECT * FROM coin_transaction_history ' \
+          'WHERE date = %s AND exchange_name = %s' \
+          ' AND position = %s'
+    temp_t = select_db(sql, (day, 'upbit', position))
+    if temp_t:
+        return temp_t
+
+
 def get_bought_list():
     """
     현재 보유한 코인 리스트 조회
@@ -189,6 +200,16 @@ def get_stop_loss_price_by(ticker: str, position: str):
         return tup[0][0]
 
 
+def get_telegram_msg():
+    """
+    텔레그램 메시지 만들기
+    :return:
+    """
+    today = get_today_format()
+    print(get_transaction_history_by_day(today, 'bid'))
+    print(get_transaction_history_by_day(today, 'ask'))
+
+
 if __name__ == '__main__':
     print('TEST')
     # 매수 희망 종목 조회
@@ -197,3 +218,4 @@ if __name__ == '__main__':
     uuid = get_entry_order_uuid('KRW-XRP', False)
     print(uuid)
     print(get_stop_loss_price_by('KRW-FLOW', 'bid'))
+    get_telegram_msg()
