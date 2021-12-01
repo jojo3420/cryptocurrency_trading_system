@@ -60,7 +60,7 @@ class BreakVolatility:
         :param R: 윌리엄스 k값
         :return:
         """
-        available_cash, _ = self.upbit.get_cash_balance()
+        _, available_cash, __ = self.upbit.get_cash_balance()
         allowable_loss_amount = (int(available_cash * 0.01) // 2)
         # print(f'{symbol} 허용가능한 손실금액: {allowable_loss_amount}')
         temp_tup = calc_position_size_by_loss_percent(symbol, allowable_loss_percent,
@@ -108,20 +108,18 @@ class BreakVolatility:
                 uuid_li.append(uuid)
             else:
                 # 손실금액 출력 확인
-                if self.tr_history.get(sym):
+                if self.tr_history.get(sym, {}).get('entry_price'):
                     entry_price = self.tr_history[sym].get('entry_price')
                     allowable_loss_amount = self.tr_history[sym].get('allowable_loss_amount')
                 else:
-                    available_cash, _ = self.upbit.get_cash_balance()
-                    allowable_loss_amount = int(available_cash * 0.01)
                     _uuid = get_entry_order_uuid(sym, is_sell=False)
                     entry_price = get_entry_price(_uuid)
+                    _, available_cash, __ = self.upbit.get_cash_balance()
+                    allowable_loss_amount = int(available_cash * 0.01) // 2
                 log(f'진입가격: {entry_price} 손절가: {stop_loss_price} 현재가: {curr_price}')
-                log(f'허용 가능한 손실금액: {allowable_loss_amount:,.0f}원')
-                if entry_price:
-                    diff = curr_price - entry_price
-                    log(f'{sym} 손익금액: {(available_qty + used) * diff:,.0f}원')
-
+                # log(f'허용 가능한 손실금액: {allowable_loss_amount:,.0f}원')
+                diff = curr_price - entry_price
+                log(f'{sym} 손익금액: {(available_qty + used) * diff:,.0f}원')
             time.sleep(0.5)
         if len(uuid_li) > 0:
             self.sell_after_logic(uuid_li)
@@ -201,7 +199,7 @@ class BreakVolatility:
             position = ret.get('side')
             trades = ret.get('trades', [])
             _, ticker = symbol.split('-')
-            balance = self.upbit.get_coin_balance(ticker)
+            _ticker, balance, _used = self.upbit.get_coin_balance(ticker)
             if state == 'done' and balance == 0:
                 update_bought_list(symbol)
                 for sub_ret in trades:
@@ -222,6 +220,8 @@ class BreakVolatility:
                         data_dict.update(self.tr_history[ticker])
                     log(data_dict)
                     save_transaction_history(data_dict)
+                    if self.tr_history.get(ticker):
+                        self.tr_history.pop(ticker)
             elif state == 'wait':
                 cancel = self.upbit.order_cancel(uuid)
                 log(f'{symbol} 주문 미체결로 취소처리: {cancel}')
@@ -246,11 +246,11 @@ if __name__ == '__main__':
             now_tm = datetime.now()
 
             # 포트폴리오 모두 청산
-            if start_sell_tm < now_tm < end_sell_tm:
-                while True:
+            if True:
+                while start_sell_tm < now_tm < end_sell_tm:
                     log('포트폴리오 모두 청산!')
-                    balance = coin_balances = upbit.get_coin_balance('ALL')
-                    if len(balance) == 0:
+                    coin_balances = upbit.get_coin_balances()
+                    if len(coin_balances) == 0:
                         break
                     uuid_list = upbit.sell_all()
                     strategy.sell_after_logic(uuid_list)

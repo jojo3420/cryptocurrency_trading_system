@@ -9,10 +9,11 @@ from math_helper import *
 
 
 class UpbitHelper:
-    def __init__(self, path='.env.dev', debug_mode=False):
+    def __init__(self, path='.env.dev', debug_mode=False, tdd_mode=False):
         root = constant.ROOT_DIR
         os.chdir(root)
         self.debug_mode = debug_mode
+        self.tdd_mode = tdd_mode
         with open(path) as stream:
             keys = {}
             lines = stream.readlines()
@@ -69,6 +70,8 @@ class UpbitHelper:
         :return:
         """
         entry_price = pyupbit.get_current_price(symbol)
+        if self.tdd_mode is True:
+            return entry_price
         return self.buy(symbol, quantity, entry_price)
 
     def buy_ask_price(self, symbol: str, quantity: float):
@@ -236,6 +239,7 @@ class UpbitHelper:
     def sell_ioc(self, symbol, qty, delay=1) -> dict:
         """ 주문 즉시 체결후 남은 수량 취소
             Intermidiate or cancel order
+            TODO FIX
         """
         ret: dict = self.sell_current_price(symbol, qty)
         time.sleep(delay)
@@ -245,8 +249,10 @@ class UpbitHelper:
             return ret
         else:
             uuid = ret.get('uuid')
-            self.order_cancel(uuid)
-            return {}
+            cancel = self.order_cancel(uuid)
+            print('cancel: ', cancel)
+            if cancel is False:
+                return ret
 
     def sell_all(self) -> list:
         """
@@ -256,14 +262,14 @@ class UpbitHelper:
         :return:
         """
         uuid_list = []
-        coin_balances = self.get_coin_balance('ALL')
+        coin_balances = self.get_coin_balances()
         # 청산 로직
         for ticker, available_qty, used in coin_balances:
             symbol = f'KRW-{ticker}'
             log(f'{symbol} 코인 청산 주문!')
             if available_qty > 0:
                 ret = self.sell_ioc(symbol, available_qty)
-                if ret.get('uuid'):
+                if ret.get('uuid', None):
                     # print(f'sell_all ret: {ret}')
                     err_msg = ret.get('err_msg', '')
                     state = ret.get('state', '')
@@ -281,42 +287,44 @@ class UpbitHelper:
         :param uuid: 주문번호
         :return: True or False
         """
-        ret = self.api.cancel_order(uuid=uuid)
-        if self.debug_mode:
-            print('주문취소 결과:', ret)
-        # 주문취소 결과: {'uuid': 'd02faa13-53ee-4041-aa12-229a4aa08d35', 'side': 'ask', 'ord_type': 'limit',
-        # 'price': '2700.0', 'state': 'wait', 'market': 'KRW-XRP',
-        # 'created_at': '2021-08-29T20:20:37+09:00', 'volume': '5.0',
-        # 'remaining_volume': '5.0', 'reserved_fee': '0.0',
-        # 'remaining_fee': '0.0', 'paid_fee': '0.0', 'locked': '5.0',
-        # 'executed_volume': '0.0', 'trades_count': 0}
-
-        cancel_order_uuid = ret.get('uuid', '')
-        if cancel_order_uuid and 'error' not in ret:
-            order_type = ret.get('ord_type', '')
-            order_state = ret.get('state', '')
-            ask_price = ret.get('price', -1)
-            quantity = ret.get('volume', -1)
+        if uuid:
+            ret = self.api.cancel_order(uuid=uuid)
             if self.debug_mode:
-                log(f'주문취소 uuid: {cancel_order_uuid}')
-                log(f'주문타입: {order_type}')  # limit: 지정가 매수
-                log(f'주문상태: {order_state}, 매도가: {ask_price}, 수량: {quantity}')
-            return True
-        else:
-            error = ret.get('error', '')
-            print(error)
-            return False
+                print('주문취소 결과:', ret)
+            # 주문취소 결과: {'uuid': 'd02faa13-53ee-4041-aa12-229a4aa08d35', 'side': 'ask', 'ord_type': 'limit',
+            # 'price': '2700.0', 'state': 'wait', 'market': 'KRW-XRP',
+            # 'created_at': '2021-08-29T20:20:37+09:00', 'volume': '5.0',
+            # 'remaining_volume': '5.0', 'reserved_fee': '0.0',
+            # 'remaining_fee': '0.0', 'paid_fee': '0.0', 'locked': '5.0',
+            # 'executed_volume': '0.0', 'trades_count': 0}
+            if ret:
+                cancel_order_uuid = ret.get('uuid')
+                if ret and cancel_order_uuid and 'error' not in ret:
+                    order_type = ret.get('ord_type', '')
+                    order_state = ret.get('state', '')
+                    ask_price = ret.get('price', 0)
+                    quantity = ret.get('volume', 0)
+                    if self.debug_mode:
+                        log(f'주문취소 uuid: {cancel_order_uuid}')
+                        log(f'주문타입: {order_type}')  # limit: 지정가 매수
+                        log(f'주문상태: {order_state}, 매도가: {ask_price}, 수량: {quantity}')
+                    return True
+                else:
+                    error = ret.get('error', '')
+                    print(error)
+        return False
 
-    def get_coin_balance(self, ticker="ALL") -> tuple:
+    def _get_balance(self, ticker) -> list or tuple:
         """
-        잔고조회 하기
-        :param ticker: 'ALL' 전체잔고, 특정티커: 티커 잔고만 조회(BTC, ETH, ADA, XRP, 형식)
-        :return: [tuple, tuple, tuple...] OR tuple
-        ex) XRP, 10, 5
+        잔고 조회 부모함수
+            :param ticker: 1) 'ALL' 코인 전체 잔고 조회(원화제외)
+                           2) 'KRW' 원화 잔고 조회,
+                           3) 'ETH','ADA', 'XRP' 개별 코인 조회
+            :return: list, tuple
         """
         try:
-            total_balance: list = self.api.get_balances()
             balance_list = []
+            total_balance: list = self.api.get_balances()
             for balance in total_balance:
                 # print(balance)
                 currency = balance.get('currency')  # KRW, XRP, BTC, ADA, XRP ...
@@ -345,26 +353,35 @@ class UpbitHelper:
                     return element
                 elif ticker == 'ALL' and currency != 'KRW':
                     balance_list.append(element)
-
-            if len(balance_list) > 0:
-                return balance_list
-            return element
-
+            return balance_list
         except Exception as ex:
             traceback.print_exc()
             msg = f'get_coin_balance() 예외발생 {str(ex)}'
             log(msg)
-            # return msg
+            if ticker == 'ALL':
+                return []
+            else:
+                return ticker, 0, 0
 
-    def get_cash_balance(self):
+    def get_coin_balance(self, ticker: str) -> tuple:
+        """ 개별 코인 잔고조회 하기
+        :param ticker 티커 잔고만 조회(BTC, ETH, ADA, XRP, 형식)
+        :return: (ticker, 사용가능한 수량, 잠긴 수량)
         """
-        현금 잔고 조회
-        :return: 주문가용현금,
+        r = self._get_balance(ticker)
+        if isinstance(r, list):
+            return ticker, 0.0, 0.0
+        return r
+
+    def get_coin_balances(self) -> list:
+        """ 코인 전체잔고 조회"""
+        return self._get_balance('ALL')
+
+    def get_cash_balance(self) -> tuple:
+        """ 현금 잔고 조회
+        :return: (ticker, 사용가능 krw, 잠긴 krw),
         """
-        _, available, used = self.get_coin_balance('KRW')
-        if self.debug_mode:
-            log(f'{_}, available: {available:,}, used: {used:,}')
-        return available, used
+        return self._get_balance('KRW')
 
     def get_transaction_history(self):
         pass
@@ -536,6 +553,8 @@ class UpbitHelper:
             traceback.print_exc()
             return get_entry_price(uuid)
 
+        #### END ####
+
 
 def get_tickers_by(market='KRW', parse=False) -> list:
     """
@@ -691,12 +710,12 @@ if __name__ == '__main__':
     # print(ret)
     # {'uuid': '5f3d3191-a50c-4907-8bf0-6ab536ab7593', 'side': 'bid', 'ord_type': 'limit', 'price': '1000.0', 'state': 'wait', 'market': 'KRW-XRP', 'created_at': '2021-09-20T19:07:55+09:00', 'volume': '10.0', 'remaining_volume': '10.0', 'reserved_fee': '5.0', 'remaining_fee': '5.0', 'paid_fee': '0.0', 'locked': '10005.0', 'executed_volume': '0.0', 'trades_count': 0}
 
-    print('cash: ', upbit.get_cash_balance())
-    print(upbit.get_coin_balance())
-    print(upbit.get_coin_balance('XRP'))
-    print(upbit.get_coin_balance('BTC'))
-    print('최하위 매도호가: ', get_lowest_ask_info(symbol, logging=False))
-    print('최상위 매수호가: ', get_highest_bid_info(symbol))
+    # print('cash: ', upbit.get_cash_balance())
+    # print(upbit.get_coin_balance())
+    # print(upbit.get_coin_balance('XRP'))
+    # print(upbit.get_coin_balance('BTC'))
+    # print('최하위 매도호가: ', get_lowest_ask_info(symbol, logging=False))
+    # print('최상위 매수호가: ', get_highest_bid_info(symbol))
 
     # print(calc_krw_market_quote_unit('KRW-ETH'))
     # print(format(calc_krw_market_quote_unit('KRW-XRP')))
@@ -710,9 +729,9 @@ if __name__ == '__main__':
     # print(upbit.get_chance(symbol))
     # print(upbit.get_fee(symbol, position_side='bid'))
     # print(upbit.get_fee(symbol, position_side='ask'))
-    print('최소주문가능금액: ', upbit.get_minimum_order_possible_amount(symbol))
-    print('최소주문가능금액: ', upbit.get_minimum_order_possible_amount('KRW-ETH'))
-    print('최소주문가능금액: ', upbit.get_minimum_order_possible_amount('KRW-BTC'))
+    # print('최소주문가능금액: ', upbit.get_minimum_order_possible_amount(symbol))
+    # print('최소주문가능금액: ', upbit.get_minimum_order_possible_amount('KRW-ETH'))
+    # print('최소주문가능금액: ', upbit.get_minimum_order_possible_amount('KRW-BTC'))
 
     # order_result = upbit.order_cancel('5f3d3191-a50c-4907-8bf0-6ab536ab7593')
     # print(order_result)
@@ -735,4 +754,7 @@ if __name__ == '__main__':
     # print(df)
 
     # print(upbit.get_coin_balance('KRW-ETH'))
-    print(get_bull_bear_coin_cnt())
+    # print(get_bull_bear_coin_cnt())
+
+    # print(upbit.buy('KRW-ADA', 10, 1000))
+    # print(upbit.order_cancel('eea95e10-6327-4f5c-97e8-98adf6e5a02c'))
