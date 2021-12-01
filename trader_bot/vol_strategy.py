@@ -238,19 +238,21 @@ if __name__ == '__main__':
             coin_buy_wish_list, _, _ = get_buy_wish_list()
             today = datetime.now()
             # 전일 코인자산 청산 시간
-            start_sell_tm = today.replace(hour=8, minute=30, second=0, microsecond=0)
-            end_sell_tm = today.replace(hour=8, minute=35, second=0, microsecond=0)
+            start_sell_tm = today.replace(hour=23, minute=31, second=0, microsecond=0)
+            end_sell_tm = today.replace(hour=23, minute=36, second=0, microsecond=0)
             # 트레이딩 시간
-            start_trading_tm = today.replace(hour=0, minute=0, second=1, microsecond=0)
-            end_trading_tm = today.replace(hour=23, minute=55, second=0, microsecond=0)
+            start_trading_tm = today.replace(hour=0, minute=30, second=0, microsecond=0)
+            end_trading_tm = today.replace(hour=23, minute=30, second=0, microsecond=0)
+
             now_tm = datetime.now()
 
             # 포트폴리오 모두 청산
-            if True:
-                while start_sell_tm < now_tm < end_sell_tm:
+            if start_sell_tm < now_tm < end_sell_tm:
+                while True:
                     log('포트폴리오 모두 청산!')
                     coin_balances = upbit.get_coin_balances()
                     if len(coin_balances) == 0:
+                        end_sell_tm = datetime.now()
                         break
                     uuid_list = upbit.sell_all()
                     strategy.sell_after_logic(uuid_list)
@@ -259,6 +261,7 @@ if __name__ == '__main__':
             if bought_symbol_list is None:
                 log('예외발생 => 매수한 종목 리스트가 배열이 아닙니다.')
                 break
+
             # 손절매: 포지션 정리
             strategy.check_stop_loss(bought_symbol_list)
 
@@ -268,11 +271,6 @@ if __name__ == '__main__':
                     if symbol not in bought_symbol_list:
                         strategy.buy_coin(symbol, R=0.5)
                         time.sleep(0.4)
-
-            # # 매수 종목 없으면 10초 휴식하기
-            if len(coin_buy_wish_list) == 0:
-                log('매수할 코인 없음 => 10초 휴식...')
-                time.sleep(10)
 
             # 텔레그램 수익률 보고!
             if now_tm.minute == 0 and now_tm.second <= 7:

@@ -243,7 +243,7 @@ class UpbitHelper:
         """
         ret: dict = self.sell_current_price(symbol, qty)
         time.sleep(delay)
-        print(ret)
+        ret = self.get_order_state(ret.get('uuid'))
         state = ret.get('state')
         if state == 'done':
             return ret
@@ -251,7 +251,9 @@ class UpbitHelper:
             uuid = ret.get('uuid')
             cancel = self.order_cancel(uuid)
             print('cancel: ', cancel)
-            if cancel is False:
+            if cancel is True:
+                return {}
+            else:
                 return ret
 
     def sell_all(self) -> list:
@@ -269,15 +271,14 @@ class UpbitHelper:
             log(f'{symbol} 코인 청산 주문!')
             if available_qty > 0:
                 ret = self.sell_ioc(symbol, available_qty)
-                if ret.get('uuid', None):
+                if ret.get('uuid'):
                     # print(f'sell_all ret: {ret}')
                     err_msg = ret.get('err_msg', '')
                     state = ret.get('state', '')
                     log(f'state: {state}')
                     if err_msg:
                         log(err_msg)
-                    else:
-                        uuid_list.append(ret.get('uuid'))
+                    uuid_list.append(ret.get('uuid'))
             time.sleep(0.5)
         return uuid_list
 
